@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% load store_extras %}
+
+{% block title %}{% if query %}Results for "{{ query }}"{% elif current_category %}{{ current_category.name }}{% else %}Shop everyday essentials{% endif %}{% endblock %}
+
+{% block content %}
+{% if not is_filtered and page_obj.number == 1 %}
+<section class="hero" aria-labelledby="hero-heading">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-7">
+                <p class="hero-kicker">New season, same fair prices</p>
+                <h1 class="hero-title" id="hero-heading">Everyday essentials that are a joy to buy.</h1>
+                <p class="hero-text">Audio, home, fitness, tech, stationery and travel gear, chosen for quality and delivered free on orders over {{ free_delivery_threshold|currency }}.</p>
+                <a class="btn btn-accent btn-lg" href="#catalogue">Browse the range</a>
+            </div>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<section class="container py-4" id="catalogue" aria-labelledby="catalogue-heading">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+        <div>
+            {% if query %}
+            <h1 class="h2 mb-1" id="catalogue-heading">Results for &ldquo;{{ query }}&rdquo;</h1>
+            {% elif current_category %}
+            <h1 class="h2 mb-1" id="catalogue-heading">{{ current_category.name }}</h1>
+            {% elif is_filtered or page_obj.number > 1 %}
+            <h1 class="h2 mb-1" id="catalogue-heading">All products</h1>
+            {% else %}
+            <h2 class="mb-1" id="catalogue-heading">All products</h2>
+            {% endif %}
+            {% if current_category.description and not query %}<p class="text-body-secondary mb-1">{{ current_category.description }}</p>{% endif %}
+            <p class="mb-0" role="status">{{ result_count }} product{{ result_count|pluralize }} found</p>
+        </div>
+
+        <form class="filter-form d-flex flex-wrap align-items-end gap-3" method="get" action="{% url 'products:product_list' %}" data-auto-submit>
+            {% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}
+            {% if current_category %}<input type="hidden" name="category" value="{{ current_category.slug }}">{% endif %}
+            <div class="form-check mb-1">
+                <input class="form-check-input" type="checkbox" id="filter-available" name="available" value="1"{% if in_stock_only %} checked{% endif %}>
+                <label class="form-check-label" for="filter-available">In stock only</label>
+            </div>
+            <div>
+                <label class="form-label small mb-1" for="filter-sort">Sort by</label>
+                <select class="form-select form-select-sm" id="filter-sort" name="sort">
+                    {% for key, label in sort_options %}
+                    <option value="{{ key }}"{% if key == sort %} selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button class="btn btn-outline-primary btn-sm js-hide-with-script" type="submit">Apply</button>
+        </form>
+    </div>
+
+    <nav class="category-tabs mb-4" aria-label="Filter by category">
+        <ul class="nav nav-pills flex-nowrap">
+            <li class="nav-item"><a class="nav-link{% if not current_category %} active{% endif %}" href="{% query_string category=None page=None %}"{% if not current_category %} aria-current="true"{% endif %}>All</a></li>
+            {% for category in nav_categories %}
+            <li class="nav-item"><a class="nav-link{% if category == current_category %} active{% endif %}" href="{% query_string category=category.slug page=None %}"{% if category == current_category %} aria-current="true"{% endif %}>{{ category.name }}</a></li>
+            {% endfor %}
+        </ul>
+    </nav>
+
+    {% if page_obj.object_list %}
+    {% if is_filtered or page_obj.number > 1 %}<h2 class="visually-hidden">Matching products</h2>{% endif %}
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xl-4 g-4">
+        {% for product in page_obj %}
+        <div class="col">{% include "includes/product_card.html" with product=product %}</div>
+        {% endfor %}
+    </div>
+    {% include "includes/pagination.html" with label="Product pages" %}
+    {% else %}
+    <div class="empty-state">
+        <h2 class="h4">No products match your search</h2>
+        <p>Try a different search term, choose another category or clear the filters to see the full range.</p>
+        <a class="btn btn-primary" href="{% url 'products:product_list' %}">View all products</a>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

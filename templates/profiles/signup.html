@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Create an account{% endblock %}
+
+{% block content %}
+<div class="container py-4 narrow">
+    <h1 class="h2">Create an account</h1>
+    <p>Already registered? <a href="{% url 'login' %}">Sign in</a>.</p>
+    <form method="post" novalidate>
+        {% csrf_token %}
+        {% include "includes/form_errors.html" with form=form %}
+        {% for field in form %}
+        {% include "includes/form_field.html" with field=field %}
+        {% endfor %}
+        <button class="btn btn-accent btn-lg" type="submit">Create account</button>
+    </form>
+</div>
+{% endblock %}

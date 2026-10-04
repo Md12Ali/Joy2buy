@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% load store_extras %}
+
+{% block title %}{{ product.name }}{% endblock %}
+{% block meta_description %}{{ product.description|truncatechars:150 }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'products:product_list' %}">Shop</a></li>
+            <li class="breadcrumb-item"><a href="{{ product.category.get_absolute_url }}">{{ product.category.name }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ product.name }}</li>
+        </ol>
+    </nav>
+
+    {% if product.status != "active" %}
+    <div class="alert alert-warning" role="status">This product is {{ product.get_status_display|lower }} and only visible to staff.</div>
+    {% endif %}
+
+    <section class="row g-4 g-lg-5" aria-labelledby="product-heading">
+        <div class="col-md-6">
+            {% if product.image %}
+            <div class="zoom-container" data-zoom tabindex="0" role="group" aria-label="Product photo. Hover, or press Enter, to zoom.">
+                <img class="product-detail-photo" src="{{ product.image.url }}" alt="{{ product.name }}">
+            </div>
+            <p class="form-text js-show-with-script" hidden>Hover over the photo to zoom in. On a touch screen, tap it.</p>
+            {% else %}
+            {% include "includes/product_image.html" with product=product css_class="product-detail-photo" %}
+            {% endif %}
+        </div>
+
+        <div class="col-md-6">
+            <p class="product-category mb-1">{{ product.category.name }}</p>
+            <h1 class="h2" id="product-heading">{{ product.name }}</h1>
+            <p class="mb-3">
+                {% star_rating product.rating review_count %}
+                <a href="#reviews">{% if review_count %}{{ product.rating|floatformat:1 }} out of 5 from {{ review_count }} review{{ review_count|pluralize }}{% else %}Be the first to review{% endif %}</a>
+            </p>
+            <p class="product-detail-price">{{ product.price|currency }}</p>
+
+            {% if not product.in_stock %}
+            <p class="stock-note stock-out"><span class="stock-dot" aria-hidden="true"></span>Out of stock</p>
+            {% elif product.low_stock %}
+            <p class="stock-note stock-low"><span class="stock-dot" aria-hidden="true"></span>Low stock: only {{ product.stock }} left</p>
+            {% else %}
+            <p class="stock-note stock-in"><span class="stock-dot" aria-hidden="true"></span>In stock ({{ product.stock }} available)</p>
+            {% endif %}
+
+            <p class="product-description">{{ product.description|linebreaksbr }}</p>
+
+            {% if product.is_purchasable %}
+            <form class="js-cart-add row g-2 align-items-end mb-3" method="post" action="{% url 'cart:cart_add' product.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <div class="col-auto">
+                    <label class="form-label" for="detail-quantity">Quantity</label>
+                    <input class="form-control quantity-input" type="number" id="detail-quantity" name="quantity" value="1" min="1" max="{{ max_quantity }}" step="1" required inputmode="numeric">
+                </div>
+                <div class="col">
+                    <button class="btn btn-accent btn-lg w-100" type="submit">Add to cart</button>
+                </div>
+            </form>
+            {% endif %}
+
+            {% if user.is_authenticated %}
+            <form class="js-wishlist" method="post" action="{% url 'profiles:wishlist_toggle' product.pk %}">
+                {% csrf_token %}
+                <button class="btn btn-outline-primary" type="submit" aria-pressed="{{ in_wishlist|yesno:'true,false' }}">{% if in_wishlist %}Remove from wishlist{% else %}Save to wishlist{% endif %}</button>
+            </form>
+            {% endif %}
+
+            {% if user.is_staff %}
+            <div class="staff-tools mt-4" role="group" aria-label="Staff tools">
+                <a class="btn btn-sm btn-outline-secondary" href="{% url 'products:product_update' product.slug %}">Edit product</a>
+                <a class="btn btn-sm btn-outline-danger" href="{% url 'products:product_delete' product.slug %}">Delete product</a>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    {% with specs=product.spec_list %}
+    {% if specs %}
+    <section class="mt-5" aria-labelledby="specs-heading">
+        <h2 class="h4" id="specs-heading">Specifications</h2>
+        <div class="table-responsive">
+            <table class="table spec-table">
+                <caption class="visually-hidden">Technical details for {{ product.name }}</caption>
+                <tbody>
+                    {% for label, value in specs %}
+                    <tr>
+                        <th scope="row">{{ label }}</th>
+                        <td>{{ value }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+    {% endwith %}
+
+    <section class="mt-5" id="reviews" aria-labelledby="reviews-heading">
+        <h2 class="h4" id="reviews-heading">Customer reviews ({{ review_count }})</h2>
+        <div class="row g-4">
+            <div class="col-lg-5">
+                {% if user.is_authenticated %}
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="h5">{% if user_review %}Edit your review{% else %}Write a review{% endif %}</h3>
+                        <form method="post" action="{% url 'products:review_save' product.slug %}" novalidate>
+                            {% csrf_token %}
+                            {% include "includes/form_errors.html" with form=review_form %}
+                            {% for field in review_form %}
+                            {% include "includes/form_field.html" with field=field %}
+                            {% endfor %}
+                            <p class="form-text js-show-with-script" id="review-counter" data-counter-for="{{ review_form.text.id_for_label }}" hidden></p>
+                            <button class="btn btn-primary" type="submit">{% if user_review %}Update review{% else %}Submit review{% endif %}</button>
+                        </form>
+                    </div>
+                </div>
+                {% else %}
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="h5">Bought this? Tell others what you think</h3>
+                        <p>Please sign in to write a review.</p>
+                        <a class="btn btn-primary" href="{% url 'login' %}?next={{ request.path|urlencode }}">Sign in to review</a>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="col-lg-7">
+                {% for review in reviews %}
+                <article class="review" aria-label="Review by {{ review.user.first_name|default:review.user.username }}">
+                    <header class="d-flex flex-wrap justify-content-between gap-2">
+                        <div>
+                            {% star_rating review.rating %}
+                            <strong class="ms-1">{{ review.user.first_name|default:review.user.username }}</strong>
+                        </div>
+                        <time class="text-body-secondary small" datetime="{{ review.created|date:'c' }}">{{ review.created|date:"j F Y" }}</time>
+                    </header>
+                    <p class="mb-2 mt-2">{{ review.text|linebreaksbr }}</p>
+                    {% if review.user_id == user.pk or user.is_staff %}
+                    <form method="post" action="{% url 'products:review_delete' review.pk %}" data-confirm="Delete this review? This cannot be undone.">
+                        {% csrf_token %}
+                        <button class="btn btn-sm btn-outline-danger" type="submit">Delete review</button>
+                    </form>
+                    {% endif %}
+                </article>
+                {% empty %}
+                <p class="empty-state mb-0">There are no reviews for this product yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+
+    {% if related_products %}
+    <section class="mt-5" aria-labelledby="related-heading">
+        <h2 class="h4" id="related-heading">More from {{ product.category.name }}</h2>
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-4">
+            {% for related in related_products %}
+            <div class="col">{% include "includes/product_card.html" with product=related %}</div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}

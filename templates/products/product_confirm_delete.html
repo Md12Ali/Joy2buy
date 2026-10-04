@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Delete {{ product.name }}{% endblock %}
+
+{% block content %}
+<div class="container py-4 narrow">
+    <h1 class="h2">Delete this product?</h1>
+    <p>You are about to permanently delete <strong>{{ product.name }}</strong> and its customer reviews. Past orders keep a record of the product name and price. This cannot be undone.</p>
+    <p class="text-body-secondary">To stop selling a product without losing its reviews, edit it and set its status to &ldquo;Archived&rdquo; instead.</p>
+    <form class="d-flex gap-2" method="post">
+        {% csrf_token %}
+        <button class="btn btn-danger" type="submit">Yes, delete product</button>
+        <a class="btn btn-outline-secondary" href="{{ cancel_url }}">Cancel</a>
+    </form>
+</div>
+{% endblock %}

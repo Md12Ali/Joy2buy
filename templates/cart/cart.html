@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% load store_extras %}
+
+{% block title %}Your cart{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="h2">Your cart</h1>
+
+    {% if cart.is_empty %}
+    <div class="empty-state">
+        <h2 class="h4">Your cart is empty</h2>
+        <p>Items you add will appear here, ready for checkout.</p>
+        <a class="btn btn-primary" href="{% url 'products:product_list' %}">Start shopping</a>
+    </div>
+    {% else %}
+    <div class="row g-4">
+        <section class="col-lg-8" aria-label="Items in your cart">
+            <ul class="list-unstyled cart-lines" id="cart-lines">
+                {% for line in cart %}
+                <li class="cart-line" data-cart-line>
+                    <a class="cart-line-media" href="{{ line.product.get_absolute_url }}" tabindex="-1" aria-hidden="true">
+                        {% include "includes/product_image.html" with product=line.product css_class="cart-thumb" %}
+                    </a>
+                    <div class="cart-line-body">
+                        <h2 class="h6 mb-1"><a href="{{ line.product.get_absolute_url }}">{{ line.product.name }}</a></h2>
+                        <p class="text-body-secondary small mb-2">{{ line.product.price|currency }} each</p>
+                        <div class="d-flex flex-wrap align-items-end gap-2">
+                            <form class="js-cart-update d-flex align-items-end gap-2" method="post" action="{% url 'cart:cart_update' line.product.pk %}">
+                                {% csrf_token %}
+                                <div>
+                                    <label class="form-label small mb-1" for="quantity-{{ line.product.pk }}">Quantity</label>
+                                    <input class="form-control form-control-sm quantity-input" type="number" id="quantity-{{ line.product.pk }}" name="quantity" value="{{ line.quantity }}" min="1" max="{{ line.max_quantity }}" step="1" required inputmode="numeric">
+                                </div>
+                                <button class="btn btn-sm btn-outline-primary js-hide-with-script" type="submit">Update<span class="visually-hidden"> quantity of {{ line.product.name }}</span></button>
+                            </form>
+                            <form class="js-cart-remove" method="post" action="{% url 'cart:cart_remove' line.product.pk %}" data-confirm="Remove {{ line.product.name }} from your cart?">
+                                {% csrf_token %}
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Remove<span class="visually-hidden"> {{ line.product.name }}</span></button>
+                            </form>
+                        </div>
+                    </div>
+                    <p class="cart-line-total mb-0"><span class="visually-hidden">Line total: </span><span data-line-total>{{ line.line_total|currency }}</span></p>
+                </li>
+                {% endfor %}
+            </ul>
+            <a href="{% url 'products:product_list' %}">Continue shopping</a>
+        </section>
+
+        <aside class="col-lg-4" aria-labelledby="summary-heading">
+            <div class="card summary-card">
+                <div class="card-body">
+                    <h2 class="h5" id="summary-heading">Order summary</h2>
+                    <dl class="summary-list" aria-live="polite">
+                        <dt>Subtotal</dt>
+                        <dd data-cart-subtotal>{{ cart.subtotal|currency }}</dd>
+                        <dt>Delivery</dt>
+                        <dd data-cart-delivery>{% if cart.delivery %}{{ cart.delivery|currency }}{% else %}Free{% endif %}</dd>
+                        <dt class="summary-total">Total</dt>
+                        <dd class="summary-total" data-cart-total>{{ cart.total|currency }}</dd>
+                    </dl>
+                    <p class="form-text" data-cart-gap-note{% if not cart.free_delivery_gap %} hidden{% endif %}>Spend <span data-cart-gap>{{ cart.free_delivery_gap|currency }}</span> more for free delivery.</p>
+                    <a class="btn btn-accent btn-lg w-100" href="{% url 'orders:checkout' %}">Go to checkout</a>
+                    {% if not user.is_authenticated %}<p class="form-text mb-0 mt-2">You will be asked to sign in or register first. Your cart is kept.</p>{% endif %}
+                </div>
+            </div>
+        </aside>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

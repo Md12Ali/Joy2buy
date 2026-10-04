@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% load store_extras %}
+
+{% block title %}Manage products{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h1 class="h2 mb-0">Manage products</h1>
+        <div class="d-flex gap-2">
+            <a class="btn btn-primary" href="{% url 'products:product_create' %}">Add product</a>
+            <a class="btn btn-outline-primary" href="{% url 'orders:order_manage' %}">Manage orders</a>
+        </div>
+    </div>
+
+    <form class="row g-2 align-items-end mb-3" method="get" role="search" aria-label="Filter products">
+        <div class="col-sm-5">
+            <label class="form-label" for="manage-q">Search</label>
+            <input class="form-control" type="search" id="manage-q" name="q" value="{{ query }}" maxlength="100">
+        </div>
+        <div class="col-sm-4">
+            <label class="form-label" for="manage-status">Status</label>
+            <select class="form-select" id="manage-status" name="status">
+                <option value="">All statuses</option>
+                {% for value, label in status_choices %}
+                <option value="{{ value }}"{% if value == status %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-sm-3">
+            <button class="btn btn-outline-primary w-100" type="submit">Filter</button>
+        </div>
+    </form>
+
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <caption>{{ page_obj.paginator.count }} product{{ page_obj.paginator.count|pluralize }}</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Product</th>
+                    <th scope="col">Category</th>
+                    <th scope="col" class="text-end">Price</th>
+                    <th scope="col" class="text-end">Stock</th>
+                    <th scope="col">Status</th>
+                    <th scope="col"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in page_obj %}
+                <tr>
+                    <th scope="row"><a href="{{ product.get_absolute_url }}">{{ product.name }}</a></th>
+                    <td>{{ product.category.name }}</td>
+                    <td class="text-end">{{ product.price|currency }}</td>
+                    <td class="text-end">{{ product.stock }}</td>
+                    <td>{{ product.get_status_display }}</td>
+                    <td class="text-end text-nowrap">
+                        <a class="btn btn-sm btn-outline-secondary" href="{% url 'products:product_update' product.slug %}" aria-label="Edit {{ product.name }}">Edit</a>
+                        <a class="btn btn-sm btn-outline-danger" href="{% url 'products:product_delete' product.slug %}" aria-label="Delete {{ product.name }}">Delete</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6">No products match these filters.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% include "includes/pagination.html" with label="Product pages" %}
+
+    <section class="mt-5" aria-labelledby="categories-heading">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h2 class="h4 mb-0" id="categories-heading">Categories</h2>
+            <a class="btn btn-outline-primary" href="{% url 'products:category_create' %}">Add category</a>
+        </div>
+        <ul class="list-group">
+            {% for category in categories %}
+            <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <span>{{ category.name }} <span class="text-body-secondary">({{ category.product_total }} product{{ category.product_total|pluralize }})</span></span>
+                <div class="d-flex gap-2">
+                    <a class="btn btn-sm btn-outline-secondary" href="{% url 'products:category_update' category.slug %}" aria-label="Edit {{ category.name }} category">Edit</a>
+                    <form method="post" action="{% url 'products:category_delete' category.slug %}" data-confirm="Delete the {{ category.name }} category?">
+                        {% csrf_token %}
+                        <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Delete {{ category.name }} category"{% if category.product_total %} disabled title="Move or delete its products first"{% endif %}>Delete</button>
+                    </form>
+                </div>
+            </li>
+            {% empty %}
+            <li class="list-group-item">No categories yet. Add one to start listing products.</li>
+            {% endfor %}
+        </ul>
+    </section>
+</div>
+{% endblock %}

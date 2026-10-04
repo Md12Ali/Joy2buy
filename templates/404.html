@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}We cannot find that page{% endblock %}
+
+{% block content %}
+<section class="container py-5 text-center error-page" aria-labelledby="error-heading">
+    <p class="error-code" aria-hidden="true">404</p>
+    <h1 class="h2" id="error-heading">We cannot find that page</h1>
+    <p class="mx-auto">The page may have been moved or the product may no longer be sold. Check the address, or use the links below to carry on shopping.</p>
+    <div class="d-flex flex-wrap justify-content-center gap-2">
+        <a class="btn btn-primary" href="{% url 'products:product_list' %}">Back to the shop</a>
+        <a class="btn btn-outline-primary" href="{% url 'cart:cart_detail' %}">View your cart</a>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% load store_extras %}
+
+{% block title %}My account{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="h2">Hello, {{ user.first_name|default:user.username }}</h1>
+
+    <div class="row g-4">
+        <aside class="col-lg-4" aria-labelledby="details-heading">
+            <div class="card summary-card">
+                <div class="card-body">
+                    <h2 class="h5" id="details-heading">Your details</h2>
+                    <dl class="mb-3">
+                        <dt>Name</dt>
+                        <dd>{{ user.get_full_name|default:"Not provided" }}</dd>
+                        <dt>Email</dt>
+                        <dd>{{ user.email|default:"Not provided" }}</dd>
+                        <dt>Phone</dt>
+                        <dd>{{ profile.phone|default:"Not provided" }}</dd>
+                        <dt>Default delivery address</dt>
+                        <dd>{% if profile.has_delivery_details %}{{ profile.default_address }}{% else %}Not provided yet{% endif %}</dd>
+                    </dl>
+                    <div class="d-grid gap-2">
+                        <a class="btn btn-primary" href="{% url 'profiles:profile_edit' %}">Edit details</a>
+                        <a class="btn btn-outline-secondary" href="{% url 'profiles:password_change' %}">Change password</a>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <div class="col-lg-8">
+            <section aria-labelledby="orders-heading">
+                <h2 class="h4" id="orders-heading">Order history</h2>
+                {% if orders %}
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <caption class="visually-hidden">Your past orders, newest first</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Reference</th>
+                                <th scope="col">Placed</th>
+                                <th scope="col" class="text-end">Items</th>
+                                <th scope="col" class="text-end">Total</th>
+                                <th scope="col">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in orders %}
+                            <tr>
+                                <th scope="row"><a href="{{ order.get_absolute_url }}">{{ order.transaction_id }}</a></th>
+                                <td>{{ order.created|date:"j M Y" }}</td>
+                                <td class="text-end">{{ order.item_count }}</td>
+                                <td class="text-end">{{ order.total|currency }}</td>
+                                <td><span class="badge text-bg-{{ order.status_colour }}">{{ order.get_status_display }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="empty-state">You have not placed any orders yet. <a href="{% url 'products:product_list' %}">Browse the shop</a>.</p>
+                {% endif %}
+            </section>
+
+            <section class="mt-5" aria-labelledby="my-reviews-heading">
+                <h2 class="h4" id="my-reviews-heading">Your reviews</h2>
+                {% for review in reviews %}
+                <article class="review" aria-label="Your review of {{ review.product.name }}">
+                    <header class="d-flex flex-wrap justify-content-between gap-2">
+                        <h3 class="h6 mb-0"><a href="{{ review.product.get_absolute_url }}#reviews">{{ review.product.name }}</a></h3>
+                        <time class="text-body-secondary small" datetime="{{ review.created|date:'c' }}">{{ review.created|date:"j F Y" }}</time>
+                    </header>
+                    <p class="mb-1">{% star_rating review.rating %}</p>
+                    <p class="mb-2">{{ review.text|linebreaksbr }}</p>
+                    <form method="post" action="{% url 'products:review_delete' review.pk %}" data-confirm="Delete your review of {{ review.product.name }}?">
+                        {% csrf_token %}
+                        <button class="btn btn-sm btn-outline-danger" type="submit">Delete review<span class="visually-hidden"> of {{ review.product.name }}</span></button>
+                    </form>
+                </article>
+                {% empty %}
+                <p class="empty-state">You have not reviewed anything yet. Open a product you have bought to leave a review.</p>
+                {% endfor %}
+            </section>
+
+            <section class="mt-5" aria-labelledby="wishlist-heading">
+                <h2 class="h4" id="wishlist-heading">Your wishlist</h2>
+                {% if wishlist %}
+                <div class="row row-cols-1 row-cols-sm-2 row-cols-xl-3 g-4">
+                    {% for product in wishlist %}
+                    <div class="col">{% include "includes/product_card.html" with product=product %}</div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="empty-state">Your wishlist is empty. Use &ldquo;Save to wishlist&rdquo; on any product page.</p>
+                {% endif %}
+            </section>
+        </div>
+    </div>
+</div>
+{% endblock %}

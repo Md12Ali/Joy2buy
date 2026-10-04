@@ -1,0 +1,11 @@
+# JOY2BUY - Python dependencies
+# Ranges pin each package to one major/minor line so that a fresh install
+# stays compatible while still receiving security patch releases.
+Django>=5.2,<5.3
+gunicorn>=23.0,<24.0
+dj-database-url>=2.3,<3.0
+psycopg2-binary>=2.9.10,<3.0
+Pillow>=11.0,<13.0
+python-dotenv>=1.0,<2.0
+whitenoise>=6.8,<7.0
+django-storages[s3]>=1.14,<2.0

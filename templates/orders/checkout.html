@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% load store_extras %}
+
+{% block title %}Checkout{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="h2">Checkout</h1>
+    <div class="row g-4">
+        <section class="col-lg-7" aria-labelledby="delivery-heading">
+            <h2 class="h4" id="delivery-heading">Delivery details</h2>
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {% include "includes/form_errors.html" with form=form %}
+                {% for field in form %}
+                {% include "includes/form_field.html" with field=field %}
+                {% endfor %}
+                <div class="alert alert-info" role="note">This is a student project: placing an order does not take payment and nothing will be dispatched.</div>
+                <button class="btn btn-accent btn-lg" type="submit">Place order</button>
+                <a class="btn btn-link" href="{% url 'cart:cart_detail' %}">Back to cart</a>
+            </form>
+        </section>
+
+        <aside class="col-lg-5" aria-labelledby="checkout-summary-heading">
+            <div class="card summary-card">
+                <div class="card-body">
+                    <h2 class="h5" id="checkout-summary-heading">Your order ({{ cart_count }} item{{ cart_count|pluralize }})</h2>
+                    <ul class="list-unstyled mb-3">
+                        {% for line in cart %}
+                        <li class="d-flex justify-content-between gap-3 py-1">
+                            <span>{{ line.quantity }} &times; {{ line.product.name }}</span>
+                            <span class="text-nowrap">{{ line.line_total|currency }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    <dl class="summary-list">
+                        <dt>Subtotal</dt>
+                        <dd>{{ cart.subtotal|currency }}</dd>
+                        <dt>Delivery</dt>
+                        <dd>{% if cart.delivery %}{{ cart.delivery|currency }}{% else %}Free{% endif %}</dd>
+                        <dt class="summary-total">Total</dt>
+                        <dd class="summary-total">{{ cart.total|currency }}</dd>
+                    </dl>
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+{% endblock %}

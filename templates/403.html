@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}You do not have access to this page{% endblock %}
+
+{% block content %}
+<section class="container py-5 text-center error-page" aria-labelledby="error-heading">
+    <p class="error-code" aria-hidden="true">403</p>
+    <h1 class="h2" id="error-heading">You do not have access to this page</h1>
+    <p class="mx-auto">This area is for store staff, or the item belongs to another customer. If you think this is a mistake, sign in with a different account.</p>
+    <div class="d-flex flex-wrap justify-content-center gap-2">
+        <a class="btn btn-primary" href="{% url 'products:product_list' %}">Back to the shop</a>
+        <a class="btn btn-outline-primary" href="{% url 'cart:cart_detail' %}">View your cart</a>
+    </div>
+</section>
+{% endblock %}

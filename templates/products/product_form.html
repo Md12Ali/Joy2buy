@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}{{ heading }}{% endblock %}
+
+{% block content %}
+<div class="container py-4 narrow">
+    <h1 class="h2">{{ heading }}</h1>
+    <p class="text-body-secondary">Fields marked <span class="required-mark" aria-hidden="true">*</span><span class="visually-hidden">with an asterisk</span> are required.</p>
+    <form method="post" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+        {% include "includes/form_errors.html" with form=form %}
+        {% for field in form %}
+        {% include "includes/form_field.html" with field=field %}
+        {% if field.name == "image" %}
+        <figure class="image-preview" id="image-preview" hidden>
+            <img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="Preview of the selected image">
+            <figcaption class="form-text">Preview of the new image</figcaption>
+        </figure>
+        {% endif %}
+        {% endfor %}
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" type="submit">Save product</button>
+            <a class="btn btn-outline-secondary" href="{% if product %}{{ product.get_absolute_url }}{% else %}{% url 'products:product_manage' %}{% endif %}">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

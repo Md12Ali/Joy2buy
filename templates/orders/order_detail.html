@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% load store_extras %}
+
+{% block title %}Order {{ order.transaction_id }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <nav aria-label="Breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'profiles:dashboard' %}">My account</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Order {{ order.transaction_id }}</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h1 class="h2 mb-0">Order {{ order.transaction_id }}</h1>
+        <span class="badge text-bg-{{ order.status_colour }} fs-6">{{ order.get_status_display }}</span>
+    </div>
+    <p class="text-body-secondary">Placed on <time datetime="{{ order.created|date:'c' }}">{{ order.created|date:"j F Y \a\t H:i" }}</time></p>
+
+    <div class="row g-4">
+        <section class="col-lg-8" aria-labelledby="items-heading">
+            <h2 class="h4" id="items-heading">Items</h2>
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <caption class="visually-hidden">Items in this order</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Product</th>
+                            <th scope="col" class="text-end">Price</th>
+                            <th scope="col" class="text-end">Quantity</th>
+                            <th scope="col" class="text-end">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in order.items.all %}
+                        <tr>
+                            <th scope="row">{% if item.product and item.product.status == "active" %}<a href="{{ item.product.get_absolute_url }}">{{ item.product_name }}</a>{% else %}{{ item.product_name }}{% endif %}</th>
+                            <td class="text-end">{{ item.unit_price|currency }}</td>
+                            <td class="text-end">{{ item.quantity }}</td>
+                            <td class="text-end">{{ item.line_total|currency }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th scope="row" colspan="3" class="text-end">Subtotal</th>
+                            <td class="text-end">{{ order.subtotal|currency }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row" colspan="3" class="text-end">Delivery</th>
+                            <td class="text-end">{% if order.delivery_cost %}{{ order.delivery_cost|currency }}{% else %}Free{% endif %}</td>
+                        </tr>
+                        <tr class="summary-total">
+                            <th scope="row" colspan="3" class="text-end">Total</th>
+                            <td class="text-end">{{ order.total|currency }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </section>
+
+        <aside class="col-lg-4" aria-labelledby="delivery-heading">
+            <div class="card summary-card">
+                <div class="card-body">
+                    <h2 class="h5" id="delivery-heading">Delivery to</h2>
+                    <address class="mb-3">
+                        {{ order.full_name }}<br>
+                        {{ order.address_line1 }}<br>
+                        {% if order.address_line2 %}{{ order.address_line2 }}<br>{% endif %}
+                        {{ order.city }}<br>
+                        {{ order.postcode }}<br>
+                        {{ order.country }}
+                    </address>
+                    <p class="mb-1">{{ order.email }}</p>
+                    <p class="mb-3">{{ order.phone }}</p>
+
+                    {% if order.can_be_cancelled and order.user_id == user.pk %}
+                    <form method="post" action="{% url 'orders:order_cancel' order.transaction_id %}" data-confirm="Cancel order {{ order.transaction_id }}? This cannot be undone.">
+                        {% csrf_token %}
+                        <button class="btn btn-outline-danger w-100" type="submit">Cancel this order</button>
+                    </form>
+                    {% endif %}
+
+                    {% if status_form %}
+                    <hr>
+                    <h2 class="h6">Staff: update status</h2>
+                    <form method="post" action="{% url 'orders:order_status_update' order.transaction_id %}">
+                        {% csrf_token %}
+                        {% for field in status_form %}
+                        {% include "includes/form_field.html" with field=field %}
+                        {% endfor %}
+                        <button class="btn btn-primary w-100" type="submit">Save status</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+{% endblock %}

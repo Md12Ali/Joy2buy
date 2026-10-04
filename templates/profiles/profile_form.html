@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Edit your details{% endblock %}
+
+{% block content %}
+<div class="container py-4 narrow">
+    <h1 class="h2">Edit your details</h1>
+    <form method="post" novalidate>
+        {% csrf_token %}
+        <fieldset class="mb-4">
+            <legend class="h5">About you</legend>
+            {% include "includes/form_errors.html" with form=user_form %}
+            {% for field in user_form %}
+            {% include "includes/form_field.html" with field=field %}
+            {% endfor %}
+        </fieldset>
+        <fieldset class="mb-4">
+            <legend class="h5">Default delivery details</legend>
+            <p class="form-text">These are used to fill in the checkout form for you.</p>
+            {% include "includes/form_errors.html" with form=profile_form %}
+            {% for field in profile_form %}
+            {% include "includes/form_field.html" with field=field %}
+            {% endfor %}
+        </fieldset>
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" type="submit">Save changes</button>
+            <a class="btn btn-outline-secondary" href="{% url 'profiles:dashboard' %}">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
