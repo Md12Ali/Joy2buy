@@ -247,6 +247,18 @@ test_search_and_filter.py .................. ✓
 | Mobile Responsiveness | ✅ PASS |
 | Accessibility (WCAG AA) | ✅ PASS |
 
+### Code Validation
+
+| Validator | Status | Evidence |
+|-----------|--------|----------|
+| HTML5 Validator | ✅ PASS | [Validation Report](assets/images/validation/html-validation.png) |
+| CSS3 Validator | ✅ PASS | [Validation Report](assets/images/validation/css-validation.png) |
+| JavaScript Console | ✅ PASS | [Console Report](assets/images/validation/javascript-validation.png) |
+
+### Website Homepage
+
+![Website Homepage](assets/images/validation/website-homepage.png)
+
 ---
 
 ## 📦 Deployment Guide
