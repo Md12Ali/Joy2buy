@@ -246,6 +246,15 @@ class OrderAccessTests(OrderTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, order.transaction_id)
 
+    def test_order_date_is_a_valid_html_datetime(self):
+        """HTML allows at most three digits of fractional seconds."""
+        order = self.place_order()
+        response = self.client.get(order.get_absolute_url())
+        self.assertRegex(
+            response.content.decode(),
+            r'datetime="\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d{4}"',
+        )
+
     def test_anonymous_user_is_redirected(self):
         order = self.place_order()
         self.client.logout()

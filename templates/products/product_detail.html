@@ -138,7 +138,7 @@
                             {% star_rating review.rating %}
                             <strong class="ms-1">{{ review.user.first_name|default:review.user.username }}</strong>
                         </div>
-                        <time class="text-body-secondary small" datetime="{{ review.created|date:'c' }}">{{ review.created|date:"j F Y" }}</time>
+                        <time class="text-body-secondary small" datetime="{{ review.created|date:'Y-m-d\TH:i:sO' }}">{{ review.created|date:"j F Y" }}</time>
                     </header>
                     <p class="mb-2 mt-2">{{ review.text|linebreaksbr }}</p>
                     {% if review.user_id == user.pk or user.is_staff %}
