@@ -271,9 +271,15 @@ def main():
     checks = Checks()
     print(f"Checking {args.base_url} at "
           f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC")
-    production_settings(args, checks)
-    staff_crud(args, checks)
-    customer_cart(args, checks)
+    try:
+        production_settings(args, checks)
+        staff_crud(args, checks)
+        customer_cart(args, checks)
+    except urllib.error.URLError as error:
+        reason = getattr(error, "reason", error)
+        checks.record("connection", f"reach {args.base_url}", False,
+                      f"{reason} - check the address and your internet "
+                      "connection")
 
     print("\n| Step | Check | Result | Detail |\n| --- | --- | --- | --- |")
     for row in checks.rows:
