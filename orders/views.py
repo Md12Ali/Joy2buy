@@ -25,6 +25,14 @@ class StockError(Exception):
     """Raised inside the checkout transaction when stock has run out."""
 
 
+class StatusChangeError(Exception):
+    """Raised when an order's current status does not allow a change."""
+
+    def __init__(self, order, message):
+        super().__init__(message)
+        self.order = order
+
+
 def _initial_delivery_details(user):
     """Pre-fill the checkout form from the customer's saved profile."""
     profile = get_profile(user)
@@ -151,23 +159,55 @@ def order_detail(request, transaction_id):
     return render(request, "orders/order_detail.html", context)
 
 
+def _change_status(order_pk, new_status, allowed_from=None):
+    """
+    Move an order to ``new_status``, returning stock if it is cancelled.
+
+    The order row is locked with SELECT ... FOR UPDATE and its status is
+    read again inside the transaction. Any other request for the same order
+    waits here until this one commits, then sees the new status, so stock
+    can never be returned twice and a cancelled order can never be reopened,
+    however many requests arrive at once. ``allowed_from`` limits which
+    statuses the change may start from.
+    """
+    cancelled = Order.Status.CANCELLED
+    with transaction.atomic():
+        order = Order.objects.select_for_update().get(pk=order_pk)
+        current = order.status
+        if current == cancelled:
+            raise StatusChangeError(
+                order,
+                f"Order {order.transaction_id} has already been cancelled "
+                "and its items returned to stock, so it can no longer be "
+                "changed.",
+            )
+        if allowed_from is not None and current not in allowed_from:
+            raise StatusChangeError(
+                order,
+                "This order can no longer be cancelled because it is "
+                f"{order.get_status_display().lower()}.",
+            )
+        if new_status == cancelled:
+            order.restock()
+        order.status = new_status
+        order.save(update_fields=["status", "updated"])
+    return order
+
+
 @login_required
 @require_POST
 def order_cancel(request, transaction_id):
     """Let a customer cancel an order that has not been dispatched yet."""
     order = _get_order_for(request, transaction_id)
-    if not order.can_be_cancelled:
-        messages.error(
-            request,
-            "This order can no longer be cancelled because it is "
-            f"{order.get_status_display().lower()}.",
+    try:
+        order = _change_status(
+            order.pk,
+            Order.Status.CANCELLED,
+            allowed_from={Order.Status.PENDING, Order.Status.PROCESSING},
         )
-        return redirect(order.get_absolute_url())
-
-    with transaction.atomic():
-        order.restock()
-        order.status = Order.Status.CANCELLED
-        order.save(update_fields=["status", "updated"])
+    except StatusChangeError as error:
+        messages.error(request, str(error))
+        return redirect(error.order.get_absolute_url())
     messages.success(
         request,
         f"Order {order.transaction_id} has been cancelled and the items "
@@ -200,26 +240,16 @@ def order_manage(request):
 def order_status_update(request, transaction_id):
     """Staff action: move an order to a new status."""
     order = get_object_or_404(Order, transaction_id=transaction_id)
-    previous = order.status
     form = OrderStatusForm(request.POST, instance=order)
     if not form.is_valid():
         messages.error(request, "Please choose a valid order status.")
         return redirect(order.get_absolute_url())
 
-    new_status = form.cleaned_data["status"]
-    cancelled = Order.Status.CANCELLED
-    if previous == cancelled and new_status != cancelled:
-        messages.error(
-            request,
-            "A cancelled order cannot be reopened because its items have "
-            "already been returned to stock.",
-        )
-        return redirect(order.get_absolute_url())
-
-    with transaction.atomic():
-        if new_status == cancelled and previous != cancelled:
-            order.restock()
-        order = form.save()
+    try:
+        order = _change_status(order.pk, form.cleaned_data["status"])
+    except StatusChangeError as error:
+        messages.error(request, str(error))
+        return redirect(error.order.get_absolute_url())
     messages.success(
         request,
         f"Order {order.transaction_id} is now "

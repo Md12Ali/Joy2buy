@@ -1,8 +1,11 @@
 """Tests for checkout, order history and staff order management."""
+import threading
 from decimal import Decimal
+from unittest import mock, skipUnless
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.db import connection
+from django.test import Client, TestCase, TransactionTestCase
 from django.urls import reverse
 
 from products.models import Category, Product
@@ -361,3 +364,206 @@ class StaffOrderTests(OrderTestCase):
         self.adapter.refresh_from_db()
         self.assertEqual(order.status, Order.Status.CANCELLED)
         self.assertEqual(self.adapter.stock, 10)
+
+
+class RepeatedCancellationTests(OrderTestCase):
+    """The same order must never be returned to stock twice."""
+
+    def cancel_url(self, order):
+        return reverse("orders:order_cancel", args=[order.transaction_id])
+
+    def status_url(self, order):
+        return reverse(
+            "orders:order_status_update", args=[order.transaction_id]
+        )
+
+    def test_customer_cancelling_twice_restocks_once(self):
+        order = self.place_order(self.adapter, 4)
+        self.client.post(self.cancel_url(order))
+        response = self.client.post(self.cancel_url(order), follow=True)
+        self.adapter.refresh_from_db()
+        self.assertEqual(self.adapter.stock, 10)
+        self.assertContains(response, "already been cancelled")
+
+    def test_staff_cancelling_twice_restocks_once(self):
+        order = self.place_order(self.adapter, 4)
+        self.client.force_login(self.staff)
+        for _ in range(2):
+            self.client.post(
+                self.status_url(order), {"status": Order.Status.CANCELLED}
+            )
+        self.adapter.refresh_from_db()
+        self.assertEqual(self.adapter.stock, 10)
+
+    def test_customer_and_staff_cancelling_restocks_once(self):
+        order = self.place_order(self.adapter, 4)
+        self.client.post(self.cancel_url(order))
+        self.client.force_login(self.staff)
+        self.client.post(
+            self.status_url(order), {"status": Order.Status.CANCELLED}
+        )
+        self.adapter.refresh_from_db()
+        self.assertEqual(self.adapter.stock, 10)
+
+    def test_stale_customer_request_does_not_restock_again(self):
+        """
+        Two cancel requests both read the order while it was still pending.
+        The first wins; the second must re-read the status under the row
+        lock and give up instead of trusting what it read earlier.
+        """
+        order = self.place_order(self.adapter, 4)
+        stale = Order.objects.get(pk=order.pk)
+        self.client.post(self.cancel_url(order))
+        with mock.patch("orders.views._get_order_for", return_value=stale):
+            self.client.post(self.cancel_url(order))
+        self.adapter.refresh_from_db()
+        self.assertEqual(self.adapter.stock, 10)
+
+    def test_stale_customer_cancel_after_dispatch_is_refused(self):
+        order = self.place_order(self.adapter, 4)
+        stale = Order.objects.get(pk=order.pk)
+        Order.objects.filter(pk=order.pk).update(status=Order.Status.SHIPPED)
+        with mock.patch("orders.views._get_order_for", return_value=stale):
+            self.client.post(self.cancel_url(order))
+        order.refresh_from_db()
+        self.adapter.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.SHIPPED)
+        self.assertEqual(self.adapter.stock, 6)
+
+    def test_stale_staff_request_does_not_restock_again(self):
+        order = self.place_order(self.adapter, 4)
+        stale = Order.objects.get(pk=order.pk)
+        self.client.force_login(self.staff)
+        self.client.post(
+            self.status_url(order), {"status": Order.Status.CANCELLED}
+        )
+        with mock.patch("orders.views.get_object_or_404", return_value=stale):
+            self.client.post(
+                self.status_url(order), {"status": Order.Status.CANCELLED}
+            )
+        self.adapter.refresh_from_db()
+        self.assertEqual(self.adapter.stock, 10)
+
+    def test_stale_staff_request_cannot_reopen_cancelled_order(self):
+        order = self.place_order(self.adapter, 4)
+        stale = Order.objects.get(pk=order.pk)
+        self.client.post(self.cancel_url(order))
+        self.client.force_login(self.staff)
+        with mock.patch("orders.views.get_object_or_404", return_value=stale):
+            self.client.post(
+                self.status_url(order), {"status": Order.Status.SHIPPED}
+            )
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.CANCELLED)
+
+
+@skipUnless(
+    connection.vendor == "postgresql",
+    "Needs a database with real row locks (run with DATABASE_URL set to "
+    "PostgreSQL).",
+)
+class SimultaneousCancellationTests(TransactionTestCase):
+    """Fire genuinely parallel requests from several threads at once."""
+
+    THREADS = 8
+
+    def setUp(self):
+        category = Category.objects.create(name="Travel")
+        self.product = Product.objects.create(
+            category=category,
+            name="Travel Adapter",
+            description="One adapter covering sockets in 150 countries.",
+            price=Decimal("22.50"),
+            stock=6,
+        )
+        self.customer = User.objects.create_user(
+            username="sam", password="Str0ng-pass!"
+        )
+        self.staff = User.objects.create_user(
+            username="manager", password="Str0ng-pass!", is_staff=True
+        )
+        self.order = Order.objects.create(
+            user=self.customer,
+            full_name="Sam Taylor",
+            email="sam@example.com",
+            phone="07700 900123",
+            address_line1="12 Market Street",
+            city="Leeds",
+            postcode="LS1 4AP",
+        )
+        OrderItem.objects.create(
+            order=self.order,
+            product=self.product,
+            product_name=self.product.name,
+            unit_price=self.product.price,
+            quantity=4,
+        )
+
+    def run_in_parallel(self, requests):
+        """Run each (user, url, data) POST in its own thread together."""
+        barrier = threading.Barrier(len(requests))
+        errors = []
+
+        def worker(user, url, data):
+            try:
+                client = Client()
+                client.force_login(user)
+                barrier.wait()
+                client.post(url, data)
+            except Exception as error:  # pragma: no cover - reported below
+                errors.append(error)
+            finally:
+                # Each thread opened its own connection; release it so the
+                # test database can be dropped afterwards.
+                connection.close()
+
+        threads = [
+            threading.Thread(target=worker, args=request)
+            for request in requests
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(errors, [])
+
+    def test_simultaneous_customer_cancellations_restock_once(self):
+        url = reverse(
+            "orders:order_cancel", args=[self.order.transaction_id]
+        )
+        self.run_in_parallel([(self.customer, url, {})] * self.THREADS)
+        self.product.refresh_from_db()
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, Order.Status.CANCELLED)
+        self.assertEqual(self.product.stock, 10)
+
+    def test_simultaneous_customer_and_staff_cancellations_restock_once(self):
+        tid = self.order.transaction_id
+        cancel = reverse("orders:order_cancel", args=[tid])
+        status = reverse("orders:order_status_update", args=[tid])
+        requests = []
+        for _ in range(self.THREADS // 2):
+            requests.append((self.customer, cancel, {}))
+            requests.append(
+                (self.staff, status, {"status": Order.Status.CANCELLED})
+            )
+        self.run_in_parallel(requests)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 10)
+
+    def test_cancel_racing_dispatch_leaves_a_consistent_result(self):
+        tid = self.order.transaction_id
+        cancel = reverse("orders:order_cancel", args=[tid])
+        status = reverse("orders:order_status_update", args=[tid])
+        requests = []
+        for _ in range(self.THREADS // 2):
+            requests.append((self.customer, cancel, {}))
+            requests.append(
+                (self.staff, status, {"status": Order.Status.SHIPPED})
+            )
+        self.run_in_parallel(requests)
+        self.product.refresh_from_db()
+        self.order.refresh_from_db()
+        # Whichever request won, stock and status must agree.
+        expected = 10 if self.order.status == Order.Status.CANCELLED else 6
+        self.assertEqual(self.product.stock, expected)
