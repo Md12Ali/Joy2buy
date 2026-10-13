@@ -79,11 +79,15 @@ class Browser:
                 "Referer": self.url(token_from),
             },
         )
-        with self.opener.open(request, timeout=30) as response:
-            return response.geturl(), response.status
+        try:
+            with self.opener.open(request, timeout=30) as response:
+                body = response.read().decode("utf-8")
+                return response.geturl(), response.status, body
+        except urllib.error.HTTPError as error:
+            return self.url(path), error.code, error.read().decode("utf-8")
 
     def login(self, username, password):
-        final_url, _ = self.post(
+        final_url, _, _ = self.post(
             "account/login/",
             {"username": username, "password": password},
             token_from="account/login/",
