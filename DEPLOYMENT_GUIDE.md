@@ -1,435 +1,197 @@
-# 🚀 JOY2BUY - COMPLETE DEPLOYMENT GUIDE
+# JOY2BUY deployment guide
 
-**Ready to Deploy Your Website to Production**
+How to deploy JOY2BUY to [Heroku](https://www.heroku.com/) with PostgreSQL, keep uploaded images, and confirm that the deployment matches the live site at <https://joy2buy-shop-218caf987cba.herokuapp.com/>.
 
-Your JOY2BUY project is fully functional and ready for deployment to Heroku. This guide walks you through every step.
+Any platform that runs a `Procfile` (Render, Railway, Fly.io) follows the same pattern: set the environment variables, run migrations, collect static files, start gunicorn.
 
----
+## 1. Files that make the project deployable
 
-## ✅ PRE-DEPLOYMENT CHECKLIST
+| File | Purpose |
+| --- | --- |
+| `requirements.txt` | Packages installed at build time (Django 5.2, gunicorn, psycopg2, WhiteNoise, dj-database-url, Pillow, python-dotenv, django-storages) |
+| `runtime.txt` | Python version: `python-3.12` |
+| `Procfile` | `release: python manage.py migrate --noinput` runs on every deploy; `web: gunicorn joy2buy.wsgi` serves the site |
+| `joy2buy/settings.py` | Reads all configuration from environment variables; WhiteNoise serves compressed static files |
+| `.env.example` | Lists every variable; copy to `.env` for local use only |
 
-Before deploying, verify you have:
+## 2. Prerequisites
 
-- [x] All code committed to GitHub
-- [x] All 12 responsive screenshots in `screenshots/` folder
-- [x] All 4 wireframes in `wireframes/` folder
-- [x] README updated with screenshots and wireframes
-- [x] Procfile configured
-- [x] runtime.txt set to Python 3.12
-- [x] requirements.txt with all dependencies
-- [x] .env.example with environment template
-- [x] All tests passing (111+ tests)
-- [x] Manual testing complete (37/37 tests)
+- A Heroku account and the [Heroku CLI](https://devcenter.heroku.com/articles/heroku-cli) (`heroku --version`).
+- Git, with this repository cloned: `git clone https://github.com/Md12Ali/Joy2buy.git`.
+- Check that `.env` and `db.sqlite3` are **not** tracked: `git ls-files | grep -E '^\.env$|sqlite3'` must print nothing.
 
-✅ **Your project is ready to deploy!**
-
----
-
-## 📋 DEPLOYMENT STEPS
-
-### STEP 1: Install Heroku CLI
-
-**On macOS:**
-```bash
-brew install heroku
-```
-
-**On Windows/Linux:**
-Visit https://devcenter.heroku.com/articles/heroku-cli and download the installer
-
-**Verify installation:**
-```bash
-heroku --version
-# Should show: heroku/7.x.x or higher
-```
-
----
-
-### STEP 2: Log In to Heroku
+## 3. Create the app and database
 
 ```bash
 heroku login
-# Opens browser window to authenticate
-# Sign in with your Heroku account
+heroku create <app-name>                                   # e.g. joy2buy-shop
+heroku addons:create heroku-postgresql:essential-0 --app <app-name>
 ```
 
-If you don't have a Heroku account:
-- Go to https://www.heroku.com
-- Click "Sign up"
-- Verify email
-- Set password
-- Return to terminal and run `heroku login`
+The add-on sets `DATABASE_URL` automatically. (The old `hobby-dev` plan no longer exists.) Heroku shows the app's host name, for example `joy2buy-shop-218caf987cba.herokuapp.com`; newer apps have a random suffix, so copy it exactly.
 
----
-
-### STEP 3: Create Heroku App
+## 4. Set the config vars
 
 ```bash
-# Choose a unique app name (e.g., joy2buy-yourusername-2026)
-# App names must be lowercase and unique globally
-heroku create joy2buy-yourusername
+APP=<app-name>
+HOST=<app-host>                                            # e.g. joy2buy-shop-218caf987cba.herokuapp.com
 
-# You should see:
-# Creating ⬢ joy2buy-yourusername... done
-# https://joy2buy-yourusername.herokuapp.com/ | https://git.heroku.com/joy2buy-yourusername.git
+heroku config:set --app $APP \
+    SECRET_KEY="$(python -c 'from django.core.management.utils import get_random_secret_key as k; print(k())')" \
+    DEBUG=False \
+    ALLOWED_HOSTS=$HOST \
+    CSRF_TRUSTED_ORIGINS=https://$HOST \
+    DATABASE_SSL_REQUIRE=True
 ```
 
-**Verify the remote was added:**
-```bash
-git remote -v
-# Should show:
-# heroku  https://git.heroku.com/joy2buy-yourusername.git (fetch)
-# heroku  https://git.heroku.com/joy2buy-yourusername.git (push)
-```
+| Variable | Required | Value |
+| --- | --- | --- |
+| `SECRET_KEY` | Yes | 50+ random characters, generated as above; never reuse the local one |
+| `DEBUG` | Yes | `False` |
+| `ALLOWED_HOSTS` | Yes | The exact app host (comma-separate several, e.g. a custom domain) |
+| `CSRF_TRUSTED_ORIGINS` | Yes | `https://` plus each host |
+| `DATABASE_URL` | Set by the add-on | `postgres://...` |
+| `DATABASE_SSL_REQUIRE` | Recommended | `True` |
+| `SECURE_SSL_REDIRECT` | No | Leave **unset** in production (defaults to `True`) |
+| `USE_AWS`, `AWS_*` | For persistent uploads | See section 6 |
+| `FREE_DELIVERY_THRESHOLD`, `STANDARD_DELIVERY_COST` | No | Defaults `50.00` and `4.99` |
 
----
+### Production HTTPS settings
 
-### STEP 4: Add PostgreSQL Database
+With `DEBUG=False` and `SECURE_SSL_REDIRECT` left unset, `joy2buy/settings.py` turns on:
 
-```bash
-# Add free PostgreSQL database (Hobby Dev tier)
-heroku addons:create heroku-postgresql:hobby-dev --app joy2buy-yourusername
+| Setting | Value | Effect |
+| --- | --- | --- |
+| `SECURE_PROXY_SSL_HEADER` | `("HTTP_X_FORWARDED_PROTO", "https")` | Trusts Heroku's router to say a request arrived over HTTPS (without it the redirect would loop) |
+| `SECURE_SSL_REDIRECT` | `True` | Every `http://` request is redirected to `https://` |
+| `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE` | `True` | Cookies are never sent over plain HTTP |
+| `SECURE_HSTS_SECONDS` | 2,592,000 (30 days) | Browsers refuse plain HTTP for this site for 30 days |
+| `SECURE_HSTS_INCLUDE_SUBDOMAINS` | `True` | |
+| `X_FRAME_OPTIONS` | `DENY` | No framing (clickjacking protection) |
+| `SECURE_CONTENT_TYPE_NOSNIFF` | `True` | |
+| `SECURE_REFERRER_POLICY` | `same-origin` | |
 
-# Verify it's attached
-heroku config --app joy2buy-yourusername | grep DATABASE_URL
-# Should show: postgresql://user:password@host:port/dbname
-```
+`SECURE_HSTS_PRELOAD` is deliberately left off: a `*.herokuapp.com` subdomain cannot be submitted to the browser preload list, so `check --deploy` reports warning W021 and nothing else (see [TESTING.md](TESTING.md#6-production-settings)).
 
----
-
-### STEP 5: Set Environment Variables
-
-```bash
-# Replace "joy2buy-yourusername" with your actual app name
-APP_NAME="joy2buy-yourusername"
-
-# Generate a secure SECRET_KEY
-heroku config:set SECRET_KEY="$(python -c 'from django.core.management.utils import get_random_secret_key as k; print(k())')" --app $APP_NAME
-
-# Set production settings
-heroku config:set DEBUG=False --app $APP_NAME
-
-# Set allowed hosts (replace with your app name)
-heroku config:set ALLOWED_HOSTS="joy2buy-yourusername.herokuapp.com" --app $APP_NAME
-
-# Set CSRF trusted origins
-heroku config:set CSRF_TRUSTED_ORIGINS="https://joy2buy-yourusername.herokuapp.com" --app $APP_NAME
-
-# Set delivery settings
-heroku config:set FREE_DELIVERY_THRESHOLD=50.00 --app $APP_NAME
-heroku config:set STANDARD_DELIVERY_COST=4.99 --app $APP_NAME
-
-# Verify all config variables
-heroku config --app $APP_NAME
-```
-
-You should see:
-```
-DATABASE_URL:              postgresql://...
-DEBUG:                     False
-ALLOWED_HOSTS:             joy2buy-yourusername.herokuapp.com
-CSRF_TRUSTED_ORIGINS:      https://joy2buy-yourusername.herokuapp.com
-FREE_DELIVERY_THRESHOLD:   50.00
-STANDARD_DELIVERY_COST:    4.99
-```
-
----
-
-### STEP 6: Deploy to Heroku
+## 5. Deploy
 
 ```bash
-# Push your code to Heroku
-git push heroku main
-
-# Watch the deployment logs
-# You should see:
-# Compressing source files... done.
-# Building source...
-# -----> Python app detected
-# -----> Installing dependencies with pip
-# -----> Running collectstatic
-# -----> Compressing static files
-# -----> Discovering process types
-# -----> Compressing app files
-# -----> Launching...
-# Released v1
-# https://joy2buy-yourusername.herokuapp.com/ deployed to Heroku
-```
-
----
-
-### STEP 7: Run Database Migrations
-
-```bash
-# Migrations run automatically during deployment, but verify:
-heroku run python manage.py migrate --app joy2buy-yourusername
-
-# You should see:
-# Running python manage.py migrate on ⬢ joy2buy-yourusername...
-# Operations to perform:
-# Apply all migrations: admin, auth, cart, contenttypes, orders, products, profiles, sessions
-# Running migrations...
-# Applying products.0001_initial... OK
-# ...
-```
-
----
-
-### STEP 8: Load Seed Data (Optional but Recommended)
-
-```bash
-# Load 14 products into production database
-heroku run python manage.py seed_data --app joy2buy-yourusername
-
-# You should see:
-# ✅ JOY2BUY SEED DATA LOADED SUCCESSFULLY!
-# ✅ Categories: 6
-# ✅ Products: 14
-# ✅ Test Users: 3
-# ✅ Reviews: 7
-# ✅ Ready for production!
-```
-
----
-
-### STEP 9: Create Admin Account
-
-```bash
-# Create superuser for admin panel
-heroku run python manage.py createsuperuser --app joy2buy-yourusername
-
-# Follow the prompts:
-# Username: admin
-# Email: your-email@example.com
-# Password: [create a strong password]
-# Password (again): [repeat password]
-# Superuser created successfully.
-```
-
-**Save your admin credentials!**
-- Username: admin
-- Email: your-email@example.com
-- Password: [your chosen password]
-
----
-
-### STEP 10: Open Your Website
-
-```bash
-# Open in default browser
-heroku open --app joy2buy-yourusername
-
-# Or visit manually
-# https://joy2buy-yourusername.herokuapp.com
-```
-
----
-
-## ✅ VERIFICATION CHECKLIST
-
-After deployment, test these on your live site:
-
-### Homepage
-- [ ] Homepage loads without errors
-- [ ] Delivery banner visible (£50 free shipping message)
-- [ ] Navigation bar displays correctly
-- [ ] JOY2BUY logo and brand colors present
-- [ ] Product grid shows 4 columns on desktop
-
-### Products
-- [ ] Products load and display with images
-- [ ] Product cards show name, price, rating, stock
-- [ ] Search bar works
-- [ ] Category filtering works
-- [ ] "In stock only" checkbox works
-- [ ] Sort dropdown works (by price, rating, newest)
-- [ ] Add to cart works
-
-### Shopping Cart
-- [ ] Add to cart button works
-- [ ] Cart updates with quantity
-- [ ] Subtotal calculates correctly
-- [ ] Delivery charge shows (£4.99)
-- [ ] Free delivery threshold shows at £50+
-
-### Checkout
-- [ ] Checkout form loads
-- [ ] Delivery address fields present
-- [ ] Form validation works
-- [ ] Order summary displays
-- [ ] Place order button works
-- [ ] Order confirmation shows with reference number
-
-### Admin Panel
-- [ ] Visit https://joy2buy-yourusername.herokuapp.com/admin/
-- [ ] Log in with your admin credentials
-- [ ] Admin panel loads
-- [ ] Can view products, orders, users
-- [ ] Can add/edit products
-
-### Performance
-- [ ] No 500 errors in console
-- [ ] CSS loads (no unstyled page)
-- [ ] Images load
-- [ ] JavaScript works (cart updates)
-- [ ] Page loads in < 3 seconds
-
----
-
-## 📊 MONITORING YOUR SITE
-
-### View Logs
-```bash
-# View recent logs
-heroku logs --app joy2buy-yourusername
-
-# View logs in real-time
-heroku logs --tail --app joy2buy-yourusername
-
-# View last 50 log lines
-heroku logs -n 50 --app joy2buy-yourusername
-```
-
-### Check Dyno Status
-```bash
-# View running processes
-heroku ps --app joy2buy-yourusername
-
-# Should show:
-# web.1  up    (running)
-```
-
-### Database Status
-```bash
-# View database info
-heroku pg:info --app joy2buy-yourusername
-```
-
----
-
-## 🔧 COMMON ISSUES & FIXES
-
-### Issue: "Application failed to start"
-```bash
-# Check logs for error
-heroku logs --tail --app joy2buy-yourusername
-
-# Likely causes:
-# 1. Missing SECRET_KEY → Set it with heroku config:set
-# 2. Database not migrated → Run heroku run python manage.py migrate
-# 3. Missing environment variables → Check all are set
-```
-
-### Issue: Static files not loading (CSS/JS 404)
-```bash
-# Collect static files
-python manage.py collectstatic --noinput
-git add staticfiles/
-git commit -m "Collect static files"
 git push heroku main
 ```
 
-### Issue: Database connection error
+During the build Heroku installs `requirements.txt` and runs `python manage.py collectstatic --noinput` automatically. The `release` line of the `Procfile` then runs the migrations before the new version starts. Then load the catalogue and create the staff account:
+
 ```bash
-# Verify database is created
-heroku addons --app joy2buy-yourusername
-
-# If missing, create it
-heroku addons:create heroku-postgresql:hobby-dev --app joy2buy-yourusername
-
-# Migrate again
-heroku run python manage.py migrate --app joy2buy-yourusername
+heroku run python manage.py seed_store --app $APP          # 6 categories, 18 products; safe to re-run
+heroku run python manage.py createsuperuser --app $APP
+heroku open --app $APP
 ```
 
-### Issue: Admin panel shows "Page not found"
-```bash
-# Create superuser
-heroku run python manage.py createsuperuser --app joy2buy-yourusername
+`seed_store` creates no users, reviews or orders. Use a strong, unique password for the superuser and do not write it in the repository.
 
-# Log in with those credentials
-```
+## 6. Persistent image storage (Amazon S3)
 
-### Issue: Images/products not loading
-```bash
-# Seed data into production
-heroku run python manage.py seed_data --app joy2buy-yourusername
-```
+Heroku dynos have an ephemeral file system: images uploaded through the product or category forms are lost on the next restart or deploy. To keep them:
 
----
+1. **Create a bucket** in the AWS console (S3 > Create bucket), e.g. `joy2buy-media`, region `eu-west-2`. Under *Block public access*, untick "Block public access granted through new public bucket or access point policies" (and the matching "any public bucket policies" option) so the bucket policy below can allow public reads.
+2. **Allow public reads of images** (Permissions > Bucket policy):
 
-## 🚀 NEXT STEPS (OPTIONAL)
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [{
+       "Sid": "PublicReadMedia",
+       "Effect": "Allow",
+       "Principal": "*",
+       "Action": "s3:GetObject",
+       "Resource": "arn:aws:s3:::joy2buy-media/*"
+     }]
+   }
+   ```
 
-### 1. Set Up Custom Domain
-```bash
-# Add custom domain
-heroku domains:add www.joybuy.com --app joy2buy-yourusername
+3. **Create an IAM user** for the app (IAM > Users), with no console access, and attach a policy that only allows this bucket:
 
-# Update DNS records in your domain provider
-# Follow Heroku's instructions
-```
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {"Effect": "Allow", "Action": ["s3:ListBucket"], "Resource": "arn:aws:s3:::joy2buy-media"},
+       {"Effect": "Allow", "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], "Resource": "arn:aws:s3:::joy2buy-media/*"}
+     ]
+   }
+   ```
 
-### 2. Enable Auto-Deploy from GitHub
-```bash
-# Via Heroku Dashboard:
-# 1. Go to your app
-# 2. Deployment → GitHub → Connect to GitHub
-# 3. Select your repository
-# 4. Enable "Automatic deploys" for main branch
-```
+   Create an access key for that user.
+4. **Set the config vars** (never commit the keys):
 
-### 3. Add Error Tracking
-```bash
-# Install Sentry for error monitoring
-heroku run pip install sentry-sdk
-# Add to settings.py
-```
+   ```bash
+   heroku config:set --app $APP USE_AWS=True AWS_STORAGE_BUCKET_NAME=joy2buy-media AWS_S3_REGION_NAME=eu-west-2
+   heroku config:set --app $APP AWS_ACCESS_KEY_ID=<key id> AWS_SECRET_ACCESS_KEY=<secret>
+   ```
 
-### 4. Set Up Backups
-```bash
-# Automatic backups on hobby tier
-# Visit Heroku Dashboard → Resources → Heroku Postgres
-# Set backup schedule
-```
+With `USE_AWS=True`, uploads are stored by `storages.backends.s3.S3Storage` (file names are never overwritten) and served from `https://<bucket>.s3.<region>.amazonaws.com/`. Static files (CSS, JS) are still served by WhiteNoise. To test: upload a product photo, run `heroku restart --app $APP`, and confirm the photo still loads.
 
----
+Without S3 the store still works: products without a photo show a coloured tile with their initials.
 
-## 📱 FINAL CHECKLIST
+## 7. Confirming the deployment matches this repository
 
-Before considering it "production ready":
+Run these after every deploy. Record the outputs in [TESTING.md](TESTING.md#8-deployment-verification).
 
-- [x] Website deployed to Heroku
-- [x] Custom domain configured (optional)
-- [x] Database with seed data loaded
-- [x] Admin account created
-- [x] SSL certificate enabled (automatic on Heroku)
-- [x] All pages tested and working
-- [x] Logs monitored for errors
-- [x] Performance acceptable
-- [x] Admin can manage products and orders
+1. **The live code is this commit.**
 
----
+   ```bash
+   git rev-parse --short HEAD
+   heroku releases --app $APP -n 3        # the latest "Deploy" entry shows the same short hash
+   ```
 
-## 🎉 CONGRATULATIONS!
+2. **The config vars are set** (prints names only, not values):
 
-Your JOY2BUY website is now LIVE in production! 
+   ```bash
+   heroku config --app $APP --json | python -c "import json,sys; print(sorted(json.load(sys.stdin)))"
+   ```
 
-**Live URL:** https://joy2buy-yourusername.herokuapp.com
-**Admin Panel:** https://joy2buy-yourusername.herokuapp.com/admin/
+   Expect at least `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `DATABASE_SSL_REQUIRE`, `DATABASE_URL`, `DEBUG`, `SECRET_KEY`, and `USE_AWS` plus the `AWS_*` names if S3 is used. `SECURE_SSL_REDIRECT` should be absent.
 
----
+3. **Django's production audit passes:**
 
-## 📞 SUPPORT
+   ```bash
+   heroku run python manage.py check --deploy --app $APP
+   ```
 
-If you encounter issues:
+   Expected: only W021 (HSTS preload, deliberately off).
 
-1. **Check Heroku logs:** `heroku logs --tail --app joy2buy-yourusername`
-2. **Read this guide:** Look for your error in "Common Issues & Fixes"
-3. **Check settings.py:** Verify all environment variables are set
-4. **Test locally first:** `python manage.py runserver` before deploying again
+4. **Migrations are applied:** `heroku run python manage.py showmigrations --app $APP` shows `[X]` everywhere.
 
----
+5. **End-to-end check with controlled test records.** Create two dedicated QA accounts on the live site: a customer (register normally) and a staff user (`heroku run python manage.py createsuperuser`, or tick *Staff status* in `/admin/`). Then, from your own computer:
 
-**Status: ✅ READY FOR PRODUCTION**
+   ```bash
+   export JOY2BUY_STAFF_USER=<qa staff username>   JOY2BUY_STAFF_PASSWORD=<password>
+   export JOY2BUY_CUSTOMER_USER=<qa customer username> JOY2BUY_CUSTOMER_PASSWORD=<password>
+   python tools/deployment_check.py --base-url https://$HOST/
+   ```
 
-**Grade Projection: 98/100 Distinction** 🏆
+   The script creates, edits and deletes a "QA test" category and draft product, checking that each step shows its success message immediately and is still there in a fresh session. It runs a customer cart flow and checks the HTTPS redirect, HSTS, security headers, Secure cookies and the custom 404 page. It deletes everything it created. It exits with status 1 if anything fails.
 
+6. **Validation and accessibility on the live site:**
+
+   ```bash
+   python tools/validate_site.py --base-url https://$HOST/
+   npm pack axe-core@4.10.2 && tar xzf axe-core-4.10.2.tgz
+   pip install playwright==1.56.0 && playwright install chromium
+   python tools/browser_checks.py --base-url https://$HOST/ --axe package/axe.min.js
+   ```
+
+Afterwards, delete or deactivate the QA accounts in `/admin/` if they are no longer needed.
+
+## 8. Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| "Application error" | `heroku logs --tail --app $APP`. `ImproperlyConfigured: The SECRET_KEY environment variable must be set` means step 4 was skipped. |
+| 400 Bad Request | The host is missing from `ALLOWED_HOSTS`. |
+| 403 "CSRF verification failed" on forms | `CSRF_TRUSTED_ORIGINS` must be `https://` plus the exact host. |
+| Redirect loop | `SECURE_PROXY_SSL_HEADER` is set automatically when `DEBUG=False`; make sure `DEBUG` is really `False`. |
+| Unstyled pages | Look for the `collectstatic` step in the build log; it must not be disabled with `DISABLE_COLLECTSTATIC`. |
+| Uploaded images disappear | Configure S3 (section 6). |
+| Admin login fails | Create the superuser on Heroku (step 5); local accounts are in a different database. |
+| Database errors after a deploy | `heroku run python manage.py migrate --app $APP` (normally done by the release phase). |
