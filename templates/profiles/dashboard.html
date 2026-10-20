@@ -70,7 +70,7 @@
                 <article class="review" aria-label="Your review of {{ review.product.name }}">
                     <header class="d-flex flex-wrap justify-content-between gap-2">
                         <h3 class="h6 mb-0"><a href="{{ review.product.get_absolute_url }}#reviews">{{ review.product.name }}</a></h3>
-                        <time class="text-body-secondary small" datetime="{{ review.created|date:'c' }}">{{ review.created|date:"j F Y" }}</time>
+                        <time class="text-body-secondary small" datetime="{{ review.created|date:'Y-m-d\TH:i:sO' }}">{{ review.created|date:"j F Y" }}</time>
                     </header>
                     <p class="mb-1">{% star_rating review.rating %}</p>
                     <p class="mb-2">{{ review.text|linebreaksbr }}</p>

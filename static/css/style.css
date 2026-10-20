@@ -83,15 +83,26 @@ h3,
     top: 0;
 }
 
+/* Navy focus ring on light backgrounds (15:1) and amber on the navy header
+   and footer (7.9:1); both clear the 3:1 needed for focus indicators.
+   ".btn" is listed because Bootstrap's own ".btn:focus-visible" rule would
+   otherwise replace the outline with a shadow that custom buttons lack. */
 a:focus-visible,
 button:focus-visible,
+.btn:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible {
-    outline: 3px solid var(--j2b-amber-dark);
+    outline: 3px solid var(--j2b-ink);
     outline-offset: 2px;
     box-shadow: none;
+}
+
+.site-header :focus-visible,
+.site-footer :focus-visible,
+.hero :focus-visible {
+    outline-color: var(--j2b-amber);
 }
 
 .required-mark {
@@ -148,6 +159,34 @@ textarea:focus-visible,
     --bs-btn-disabled-color: var(--j2b-ink);
     --bs-btn-disabled-bg: var(--j2b-amber);
     --bs-btn-disabled-border-color: var(--j2b-amber);
+}
+
+/* Keep visually hidden table labels (position: absolute) inside the
+   scrolling wrapper; otherwise they widen the whole page on phones. */
+.table-responsive {
+    position: relative;
+}
+
+/* Bootstrap's grey (#6c757d) and red (#dc3545) are only 4.4:1 and 4.3:1
+   on the paper background; use the palette's AA colours instead. */
+.btn-outline-secondary {
+    --bs-btn-color: var(--j2b-muted);
+    --bs-btn-border-color: var(--j2b-muted);
+    --bs-btn-hover-bg: var(--j2b-muted);
+    --bs-btn-hover-border-color: var(--j2b-muted);
+    --bs-btn-active-bg: var(--j2b-muted);
+    --bs-btn-active-border-color: var(--j2b-muted);
+    --bs-btn-disabled-color: var(--j2b-muted);
+    --bs-btn-disabled-border-color: var(--j2b-muted);
+}
+
+.btn-outline-danger {
+    --bs-btn-color: var(--j2b-danger);
+    --bs-btn-border-color: var(--j2b-danger);
+    --bs-btn-hover-bg: var(--j2b-danger);
+    --bs-btn-hover-border-color: var(--j2b-danger);
+    --bs-btn-active-bg: var(--j2b-danger);
+    --bs-btn-active-border-color: var(--j2b-danger);
 }
 
 .btn.is-busy {

@@ -16,7 +16,7 @@
         <h1 class="h2 mb-0">Order {{ order.transaction_id }}</h1>
         <span class="badge text-bg-{{ order.status_colour }} fs-6">{{ order.get_status_display }}</span>
     </div>
-    <p class="text-body-secondary">Placed on <time datetime="{{ order.created|date:'c' }}">{{ order.created|date:"j F Y \a\t H:i" }}</time></p>
+    <p class="text-body-secondary">Placed on <time datetime="{{ order.created|date:'Y-m-d\TH:i:sO' }}">{{ order.created|date:"j F Y \a\t H:i" }}</time></p>
 
     <div class="row g-4">
         <section class="col-lg-8" aria-labelledby="items-heading">
