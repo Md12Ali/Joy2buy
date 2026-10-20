@@ -1,0 +1,74 @@
+# Started by hand (Actions > Live site checks > Run workflow). Checks the
+# deployed site from GitHub's servers and saves every result and the
+# screenshots as a downloadable artifact.
+#
+# For the signed-in checks, add these repository secrets (Settings >
+# Secrets and variables > Actions) for dedicated QA accounts on the live
+# site: JOY2BUY_STAFF_USER, JOY2BUY_STAFF_PASSWORD, JOY2BUY_CUSTOMER_USER,
+# JOY2BUY_CUSTOMER_PASSWORD. Without them those checks are skipped.
+name: Live site checks
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Site to check
+        default: https://joy2buy-shop-218caf987cba.herokuapp.com/
+        required: true
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: ${{ inputs.base_url }}
+      JOY2BUY_STAFF_USER: ${{ secrets.JOY2BUY_STAFF_USER }}
+      JOY2BUY_STAFF_PASSWORD: ${{ secrets.JOY2BUY_STAFF_PASSWORD }}
+      JOY2BUY_CUSTOMER_USER: ${{ secrets.JOY2BUY_CUSTOMER_USER }}
+      JOY2BUY_CUSTOMER_PASSWORD: ${{ secrets.JOY2BUY_CUSTOMER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install checking tools
+        run: |
+          pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+          npm pack axe-core@4.10.2 && tar xzf axe-core-4.10.2.tgz
+          mkdir -p results
+      - name: Deployment check (HTTPS, headers, CRUD, persistence)
+        id: deploy
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python tools/deployment_check.py --base-url "$BASE_URL" \
+            | tee results/deployment_check.txt
+      - name: HTML and CSS validation (validator.w3.org)
+        id: validate
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python tools/validate_site.py --base-url "$BASE_URL" \
+            | tee results/validate_site.txt
+      - name: Accessibility, keyboard, responsive and screenshots
+        id: browser
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python tools/browser_checks.py --base-url "$BASE_URL" \
+            --axe package/axe.min.js --screenshots results/screenshots \
+            | tee results/browser_checks.txt
+      - name: Save results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-check-results
+          path: results/
+      - name: Overall result
+        run: |
+          echo "deployment_check: ${{ steps.deploy.outcome }}"
+          echo "validate_site:    ${{ steps.validate.outcome }}"
+          echo "browser_checks:   ${{ steps.browser.outcome }}"
+          test "${{ steps.deploy.outcome }}" = success
+          test "${{ steps.validate.outcome }}" = success
+          test "${{ steps.browser.outcome }}" = success

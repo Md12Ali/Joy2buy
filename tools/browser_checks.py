@@ -98,6 +98,10 @@ class Report:
         mark = "PASS" if passed else "FAIL"
         print(f"   {mark} {check}{': ' + detail if detail else ''}")
 
+    def skip(self, page, check, reason):
+        self.rows.append((page, check, "SKIPPED", reason))
+        print(f"   SKIPPED {check}: {reason}")
+
     @property
     def failed(self):
         return [row for row in self.rows if row[2] == "FAIL"]
@@ -253,15 +257,21 @@ def run(args):
             page.on("console", lambda message: message.type == "error"
                     and js_errors.append(message.text))
             print(f"\n== {role} ==")
+            if role != "public" and not os.environ.get(
+                    f"JOY2BUY_{role.upper()}_USER"):
+                report.skip(role, "sign in",
+                            f"JOY2BUY_{role.upper()}_USER/_PASSWORD not set")
+                context.close()
+                continue
             if role != "public" and not sign_in(page, args.base_url, role):
-                report.add(role, "sign in", False,
-                           "credentials missing or rejected")
+                report.add(role, "sign in", False, "credentials rejected")
                 context.close()
                 continue
             for name, path in pages_for(page, args.base_url, role):
                 if path is None:
-                    report.add(name, "page exists", False,
-                               "no example URL found")
+                    report.skip(name, "page exists",
+                                "no example on this site yet (e.g. no "
+                                "orders); not checked")
                     continue
                 for device, (width, height) in WIDTHS.items():
                     print(f"-- {name} at {width}px")
@@ -295,8 +305,10 @@ def run(args):
     print("\n| Page | Check | Result | Detail |\n| --- | --- | --- | --- |")
     for row in report.rows:
         print("| " + " | ".join(row) + " |")
-    print(f"\n{len(report.rows) - len(report.failed)} of {len(report.rows)} "
-          f"checks passed; {len(report.failed)} failed.")
+    skipped = sum(row[2] == "SKIPPED" for row in report.rows)
+    passed = len(report.rows) - len(report.failed) - skipped
+    print(f"\n{passed} of {len(report.rows)} checks passed; {skipped} "
+          f"skipped; {len(report.failed)} failed.")
     return 1 if report.failed else 0
 
 
