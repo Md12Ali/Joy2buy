@@ -591,6 +591,7 @@ The full report, with commands, outputs, manual test steps, bugs found and fixed
 | Automated tests (SQLite) | `python manage.py test` | 122 tests: 119 pass, 3 skipped (need PostgreSQL row locks) |
 | Automated tests (PostgreSQL) | `DATABASE_URL=postgres://... python manage.py test` | 122 of 122 pass |
 | PEP 8 | `python -m flake8` | 0 findings |
+| JavaScript lint | `npx eslint static/js` | 0 problems |
 | Migrations match models | `python manage.py makemigrations --check --dry-run` | No changes |
 | HTML and CSS (Nu HTML Checker) | `python tools/validate_site.py` | 22 public, customer and staff pages plus `style.css`: 0 errors, 0 warnings |
 | Accessibility, keyboard, responsive, JS | `python tools/browser_checks.py` | 145 of 145 checks pass |
@@ -621,7 +622,7 @@ heroku run python manage.py createsuperuser
 
 ### What the Git history shows
 
-The public repository's history begins with a single upload of the finished project (`220439c`, 4 October 2026), followed by documentation and tooling commits. Feature-by-feature development before that upload is not recorded in this repository.
+The public repository's history begins with a single upload of the finished project (`220439c`, 4 October 2026), followed by documentation and tooling commits. Feature-by-feature development before that upload is not recorded in this repository. The developer has confirmed that no other records of that earlier work (older repositories, archives, notes or screenshots) exist, so none are included, and none have been recreated after the fact.
 
 ### Commits since assessment feedback
 

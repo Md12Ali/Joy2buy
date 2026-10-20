@@ -146,7 +146,7 @@
             if (data.ok && onSuccess) {
                 onSuccess(data);
             }
-        } catch (error) {
+        } catch {
             form.dataset.noAjax = "true";
             form.submit();
         } finally {
@@ -346,7 +346,7 @@
                     if (requestId === latestRequest) {
                         renderSuggestions(data.results || []);
                     }
-                } catch (error) {
+                } catch {
                     hideSuggestions();
                 }
             }, 250);
