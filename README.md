@@ -1,5 +1,7 @@
 # JOY2BUY
 
+[![Tests](https://github.com/Md12Ali/Joy2buy/actions/workflows/tests.yml/badge.svg)](https://github.com/Md12Ali/Joy2buy/actions/workflows/tests.yml)
+
 A full-stack e-commerce storefront and order management system built with Django 5.2, PostgreSQL, Bootstrap 5 and vanilla JavaScript.
 
 Submitted for the Level 5 Diploma in Web Application Development, Unit 3: Back-End Development.
@@ -505,6 +507,7 @@ Joy2buy/
 ├── profiles/                 UserProfile; sign up, dashboard, wishlist
 ├── templates/                base.html, error pages, one folder per app, includes/
 ├── static/                   css/style.css, js/main.js, images/favicon.svg
+├── .github/workflows/        tests.yml (CI), live-checks.yml (checks the deployed site)
 ├── tools/                    validate_site.py, browser_checks.py, ui_walkthrough.py, deployment_check.py
 ├── assets/images/screenshots Real screenshots (mobile, tablet, desktop)
 └── media/                    Uploaded images in local development only
@@ -593,6 +596,8 @@ The full report, with commands, outputs, manual test steps, bugs found and fixed
 | Accessibility, keyboard, responsive, JS | `python tools/browser_checks.py` | 145 of 145 checks pass |
 | Browser-level manual test cases | `python tools/ui_walkthrough.py` | 28 of 28 scripted cases pass; results for each of the 40 planned cases in TESTING.md |
 | Deployment CRUD and persistence | `python tools/deployment_check.py` | 19 of 19 checks pass on a production-like local build |
+| Continuous integration | GitHub Actions `Tests` workflow on every push | flake8, migrations and all 122 tests on PostgreSQL 16 and SQLite |
+| Live site | GitHub Actions `Live site checks` workflow | HTTPS, headers, HTML/CSS and accessibility checked on the deployed site (TESTING.md section 8) |
 
 ---
 
@@ -633,6 +638,8 @@ Each change made in response to assessment feedback is a separate commit with a 
 | `Add deployment check using controlled test records` | `tools/deployment_check.py` |
 | `Add scripted walkthrough of manual test cases; remove stale scripts` | `tools/ui_walkthrough.py` |
 | `Rewrite README, deployment guide and testing report` | This documentation |
+| `Add GitHub Actions: tests on PostgreSQL and on-demand live site checks` | CI on every push; checks of the deployed site |
+| `Record live site check results` | Live results in TESTING.md section 8 |
 
 Run `git log --stat` to see each commit in full.
 

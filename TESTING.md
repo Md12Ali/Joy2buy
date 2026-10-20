@@ -33,6 +33,8 @@ This report records how JOY2BUY was tested, the commands used, their actual outp
 | CRUD, immediate feedback and persistence | `tools/deployment_check.py` | 19 of 19 checks pass on the production-like build |
 | Production settings | `python manage.py check --deploy` | 1 warning (W021, HSTS preload), deliberate |
 | Credentials in Git history | gitleaks 8.21.2 and a manual pattern search | No real credentials; 2 test-fixture passwords |
+| Tests in public CI | GitHub Actions **Tests** workflow, [run 39498840738](https://github.com/Md12Ali/Joy2buy/actions/runs/39498840738) | flake8 clean; no missing migrations; 122 tests OK on PostgreSQL 16 (including the simultaneous-cancellation tests) and on SQLite |
+| Live site | GitHub Actions **Live site checks** workflow, [run 39499040282](https://github.com/Md12Ali/Joy2buy/actions/runs/39499040282) | HTTPS and security headers 6/6; HTML/CSS 0 errors on 8 public pages + CSS; browser checks 49 pass, 2 skipped, 0 fail; signed-in checks not yet run |
 
 **Where the checks were run (13 October 2026).** A production-like local build of the current code:
 
@@ -44,7 +46,7 @@ This report records how JOY2BUY was tested, the commands used, their actual outp
 The test environment's network blocked `validator.w3.org`, `cdn.jsdelivr.net` and the live Heroku site:
 - **HTML and CSS validation:** the Nu checker ran locally. It is the same software, with the same JSON API, as validator.w3.org/nu.
 - **Bootstrap 5.3.3:** browser requests for the jsDelivr files were answered from the identical npm package (`--npm-mirror`). jsDelivr's `/npm/` URLs serve that package's files unchanged.
-- **Live site:** the checks were **not** run against <https://joy2buy-shop-218caf987cba.herokuapp.com/> from this environment; see [section 8](#8-deployment-verification).
+- **Live site:** the environment above could not reach <https://joy2buy-shop-218caf987cba.herokuapp.com/>, so the live checks were run from GitHub Actions instead; see [section 8](#8-deployment-verification).
 
 The fresh-clone setup in the README was also followed literally on Python 3.12.3 (the version in `runtime.txt`), using SQLite:
 - `seed_store` added 6 categories and 18 products; a second run added nothing.
@@ -76,6 +78,8 @@ Ran 122 tests in 21.294s
 
 OK
 ```
+
+The same two runs happen in GitHub Actions on every push (`.github/workflows/tests.yml`, PostgreSQL 16 service); the first run is linked in section 1.
 
 To run them yourself, point `DATABASE_URL` at any PostgreSQL database the user may create a test database on. Useful variations:
 
@@ -645,20 +649,41 @@ python tools/deployment_check.py --base-url http://127.0.0.1:8000/   # exit stat
 
 Afterwards a database query confirmed no "QA test" product or category was left behind.
 
-### Live site (developer to complete)
+### Live site (GitHub Actions, 20 October 2026)
 
-The live Heroku site could not be reached from the environment where these checks were written. The steps in [DEPLOYMENT_GUIDE.md section 7](DEPLOYMENT_GUIDE.md#7-confirming-the-deployment-matches-this-repository) must be run against <https://joy2buy-shop-218caf987cba.herokuapp.com/>, and the results recorded here:
+The checks were run against <https://joy2buy-shop-218caf987cba.herokuapp.com/> from GitHub's servers by the **Live site checks** workflow (`.github/workflows/live-checks.yml`), [run 39499040282](https://github.com/Md12Ali/Joy2buy/actions/runs/39499040282). The full output and screenshots of the live site are saved with the run as the `live-check-results` artifact. That run had no QA account logins, so the signed-in checks were skipped; they can be repeated with logins (see below).
+
+**Production settings seen from outside** (`deployment_check.py`):
+
+| Check | Result | Detail |
+| --- | --- | --- |
+| HTTP redirects to HTTPS | PASS | HTTP 301 -> `https://joy2buy-shop-218caf987cba.herokuapp.com/` |
+| Strict-Transport-Security set | PASS | `max-age=2592000; includeSubDomains` |
+| X-Frame-Options is DENY | PASS | |
+| X-Content-Type-Options is nosniff | PASS | |
+| CSRF cookie marked Secure | PASS | |
+| 404 page is the custom page, not Django's debug page (so `DEBUG` is off) | PASS | HTTP 404 |
+| Staff CRUD, immediate feedback, persistence | SKIPPED | QA staff login not supplied to this run |
+| Customer cart add / update / remove | SKIPPED | QA customer login not supplied to this run |
+
+**HTML and CSS** (`validate_site.py`, using the official validator.w3.org service): home, search results, empty search, a product page, cart, sign in, register and the 404 page, plus `style.css`: **0 errors, 0 warnings** on all 9. Customer and staff pages were skipped (no logins).
+
+**Accessibility, keyboard, responsive, JavaScript** (`browser_checks.py`): home, product, cart and sign-in pages at 390, 768 and 1440px: **49 of 51 checks passed, 2 skipped (customer and staff sign-in), 0 failed**. This includes axe-core contrast and WCAG 2.1 A/AA rules, keyboard reach, visible focus, skip link, mobile menu and no console errors.
+
+**The live site runs the fixed code.** The live pages pass the HTML checks that the old confirmation-modal markup failed on every page (bug 8), and the keyboard focus check that the old CSS failed on the amber buttons (bug 11). So the deployment includes this repository's fixes.
 
 | Check | Command | Result (date, output) |
 | --- | --- | --- |
-| Live release is the current commit | `heroku releases -n 3` vs `git rev-parse --short HEAD` | Not yet recorded |
+| Live release is the current commit | `heroku releases -n 3` vs `git rev-parse --short HEAD` | Not checked directly (no Heroku CLI access). Indirectly confirmed above: the live pages include the fixes for bugs 8 and 11 |
 | Config var names present | `heroku config --json` (names only) | Not yet recorded |
-| Production audit | `heroku run python manage.py check --deploy` | Not yet recorded |
-| Migrations applied | `heroku run python manage.py showmigrations` | Not yet recorded |
-| CRUD, feedback, persistence, HTTPS, headers | `python tools/deployment_check.py --base-url https://joy2buy-shop-218caf987cba.herokuapp.com/` | Not yet recorded |
-| HTML and CSS | `python tools/validate_site.py --base-url https://...` | Not yet recorded |
-| Accessibility, keyboard, responsive | `python tools/browser_checks.py --base-url https://... --axe package/axe.min.js` | Not yet recorded |
+| Production audit | `heroku run python manage.py check --deploy` | Not yet recorded; the settings it audits were confirmed from outside on 20 Oct 2026 (table above) |
+| Migrations applied | `heroku run python manage.py showmigrations` | Not yet recorded; the live pages that read every table load without errors |
+| CRUD, feedback, persistence, HTTPS, headers | `tools/deployment_check.py` (Live site checks workflow) | 20 Oct 2026: HTTPS and headers 6 of 6 PASS; CRUD and cart SKIPPED (no QA logins yet) |
+| HTML and CSS | `tools/validate_site.py` (Live site checks workflow) | 20 Oct 2026: 8 public pages + CSS, 0 errors, 0 warnings |
+| Accessibility, keyboard, responsive | `tools/browser_checks.py` (Live site checks workflow) | 20 Oct 2026: 49 PASS, 2 SKIPPED, 0 FAIL |
 | Uploaded image survives a restart | Upload a photo, `heroku restart`, reload the product | Not yet recorded |
+
+To run the signed-in checks too, add the QA accounts' logins as repository secrets (Settings > Secrets and variables > Actions): `JOY2BUY_STAFF_USER`, `JOY2BUY_STAFF_PASSWORD`, `JOY2BUY_CUSTOMER_USER`, `JOY2BUY_CUSTOMER_PASSWORD`. Then start **Actions > Live site checks > Run workflow**.
 
 ---
 
@@ -693,7 +718,7 @@ None of these changed the site's behaviour.
 
 ## 10. Known limitations
 
-- **Live site not verified from here.** All results above are from a production-like local build of the same code. Section 8's live checks remain to be run and recorded by the developer.
+- **Live site partly verified.** HTTPS, security headers, `DEBUG` off, HTML/CSS validity and accessibility of the public pages were confirmed on the live site (section 8). The signed-in live checks (staff CRUD and persistence, customer cart) and the Heroku-side checks (`check --deploy`, config vars, image persistence) are not yet recorded.
 - **Manual testing by hand is not yet recorded.** Most cases have scripted or automated evidence, but cases 8, 39 and 40 have no result yet, and the "By hand on live site" column is empty.
 - **Development history.** The public Git history starts with one upload of the finished project, so it does not show how individual features were built and tested before 4 October 2026. Only changes made since then are recorded as individual commits.
 - **Payments are simulated.** No card details are taken; Stripe or similar would be the next step.
