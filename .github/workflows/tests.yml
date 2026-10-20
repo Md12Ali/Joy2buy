@@ -1,0 +1,41 @@
+# Runs on every push and pull request: PEP 8, migrations check and the full
+# test suite on SQLite and on PostgreSQL (where the threaded cancellation
+# tests run with real row locks).
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt flake8
+      - name: flake8 (PEP 8)
+        run: python -m flake8
+      - name: Models match migrations
+        run: DEBUG=True python manage.py makemigrations --check --dry-run
+      - name: Tests on SQLite
+        run: python manage.py test -v 2
+      - name: Tests on PostgreSQL (includes simultaneous cancellation tests)
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/joy2buy
+        run: python manage.py test -v 2
