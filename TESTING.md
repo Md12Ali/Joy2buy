@@ -26,7 +26,7 @@ This report records how JOY2BUY was tested, the commands used, their actual outp
 | Concurrency (8 parallel requests) | `SimultaneousCancellationTests` on PostgreSQL | Fails on the old code; passes on the fixed code, 10 runs out of 10 |
 | PEP 8 | `python -m flake8` | 0 findings in the whole project |
 | Migrations | `python manage.py makemigrations --check --dry-run` | No changes detected |
-| JavaScript syntax | `node --check static/js/main.js` | No errors |
+| JavaScript syntax and lint | `node --check static/js/main.js`, `npx eslint static/js` | No errors; ESLint 0 problems (2 fixed) |
 | Rendered HTML and CSS | `tools/validate_site.py` (Nu HTML Checker) | 22 pages and `style.css`: 0 errors, 0 warnings (after fixing 2 bugs) |
 | Accessibility, keyboard, contrast, responsive, JS console | `tools/browser_checks.py` (Chromium + axe-core) | 145 of 145 checks pass (21 failed before the fixes) |
 | Browser-level manual test cases | `tools/ui_walkthrough.py` | 28 of 28 scripted cases pass |
@@ -226,6 +226,14 @@ The **first run** failed 20 of 23 checks. Every page had the same error: `aria-l
 None were skipped. `style.css` also passes as CSS level 3 with no warnings.
 
 ### JavaScript
+
+ESLint 9.17.0 with its recommended rules (`eslint.config.mjs`) was run on `static/js/main.js` on 28 October 2026. It found 2 errors: two `catch (error)` blocks never used `error` (lines 149 and 349). Both were changed to `catch {`, and ESLint now reports **0 problems**. ESLint also runs in the GitHub Actions **Tests** workflow on every push.
+
+```text
+$ npx eslint static/js
+$ echo $?
+0
+```
 
 `node --check static/js/main.js` reports no syntax errors. `tools/browser_checks.py` listens for console errors and uncaught exceptions on every page it opens, at every width and in every role, and recorded **none**.
 
