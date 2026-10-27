@@ -21,8 +21,8 @@ This report records how JOY2BUY was tested, the commands used, their actual outp
 
 | Area | Tool / command | Result |
 | --- | --- | --- |
-| Unit and integration tests, SQLite | `python manage.py test` | 122 run: 119 pass, 3 skipped by design |
-| Unit and integration tests, PostgreSQL | `DATABASE_URL=postgres://... python manage.py test` | 122 of 122 pass |
+| Unit and integration tests, SQLite | `python manage.py test` | 125 run: 122 pass, 3 skipped by design |
+| Unit and integration tests, PostgreSQL | `DATABASE_URL=postgres://... python manage.py test` | 125 of 125 pass |
 | Concurrency (8 parallel requests) | `SimultaneousCancellationTests` on PostgreSQL | Fails on the old code; passes on the fixed code, 10 runs out of 10 |
 | PEP 8 | `python -m flake8` | 0 findings in the whole project |
 | Migrations | `python manage.py makemigrations --check --dry-run` | No changes detected |
@@ -33,8 +33,8 @@ This report records how JOY2BUY was tested, the commands used, their actual outp
 | CRUD, immediate feedback and persistence | `tools/deployment_check.py` | 19 of 19 checks pass on the production-like build |
 | Production settings | `python manage.py check --deploy` | 1 warning (W021, HSTS preload), deliberate |
 | Credentials in Git history | gitleaks 8.21.2 and a manual pattern search | No real credentials; 2 test-fixture passwords |
-| Tests in public CI | GitHub Actions **Tests** workflow, [run 39498840738](https://github.com/Md12Ali/Joy2buy/actions/runs/39498840738) | flake8 clean; no missing migrations; 122 tests OK on PostgreSQL 16 (including the simultaneous-cancellation tests) and on SQLite |
-| Live site | GitHub Actions **Live site checks** workflow, [run 39499040282](https://github.com/Md12Ali/Joy2buy/actions/runs/39499040282) | HTTPS and security headers 6/6; HTML/CSS 0 errors on 8 public pages + CSS; browser checks 49 pass, 2 skipped, 0 fail; signed-in checks not yet run |
+| Tests in public CI | GitHub Actions **Tests** workflow, [run 40504380149](https://github.com/Md12Ali/Joy2buy/actions/runs/40504380149) (27 October 2026) | flake8 and ESLint clean; no missing migrations; 125 tests OK on PostgreSQL 16 (including the simultaneous-cancellation tests) and on SQLite |
+| Live site | GitHub Actions **Live site checks** workflow, [run 39499040282](https://github.com/Md12Ali/Joy2buy/actions/runs/39499040282), repeated 27 Oct 2026 in [run 40504632653](https://github.com/Md12Ali/Joy2buy/actions/runs/40504632653) | HTTPS and security headers 6/6; HTML/CSS 0 errors on 8 public pages + CSS; browser checks 49 pass, 2 skipped, 0 fail; signed-in checks not yet run |
 
 **Where the checks were run (13 October 2026).** A production-like local build of the current code:
 
@@ -59,6 +59,20 @@ The fresh-clone setup in the README was also followed literally on Python 3.12.3
 ## 2. Automated tests
 
 ### Commands and output
+
+Latest results, from GitHub Actions [run 40504380149](https://github.com/Md12Ali/Joy2buy/actions/runs/40504380149) on 27 October 2026 (copied from the run's annotations, which are taken from the last lines of each test run):
+
+```text
+$ python manage.py test -v 2                       # SQLite
+Ran 125 tests in 8.941s
+OK (skipped=3)
+
+$ DATABASE_URL=postgres://... python manage.py test -v 2
+Ran 125 tests in 11.224s
+OK
+```
+
+The earlier local runs on 13 October 2026, before the 3 `OrderAdminTests` were added (bug 14), gave:
 
 ```text
 $ python manage.py test
@@ -94,14 +108,14 @@ python manage.py test orders.tests.RepeatedCancellationTests        # one class
 | --- | --- | --- |
 | `products/tests.py` | 45 | Model creation, slugs, relationships, validators, rating signals; list, search, filter, detail and 404 pages; review create, update, delete and permissions; staff product and category CRUD |
 | `cart/tests.py` | 20 | Add, update, remove; stock caps; invalid quantities; totals and delivery charge; JSON responses; open-redirect protection |
-| `orders/tests.py` | 38 | Order and line models, totals; checkout form validation; placing an order, stock reduction and rollback; owner / staff access; cancellation; status updates; repeated, stale and simultaneous cancellation; valid HTML date format |
+| `orders/tests.py` | 41 | Order and line models, totals; checkout form validation; placing an order, stock reduction and rollback; owner / staff access; cancellation; status updates; repeated, stale and simultaneous cancellation; Django admin cannot bypass the locked status change; valid HTML date format |
 | `profiles/tests.py` | 19 | Profile signal; sign up, login, logout; password hashing and change; dashboard; profile update; wishlist |
-| **Total** | **122** | |
+| **Total** | **125** | |
 
 Every test, by class (from the PostgreSQL `-v 2` run, all "ok"):
 
 <details>
-<summary>Show all 122 tests</summary>
+<summary>Show all 125 tests</summary>
 
 | App | Test class | Tests | What each test checks |
 | --- | --- | --- | --- |
@@ -110,6 +124,7 @@ Every test, by class (from the PostgreSQL `-v 2` run, all "ok"):
 | `orders` | `CheckoutFormTests` | 3 | bad phone postcode and email are rejected; required fields; valid details are normalised |
 | `orders` | `CheckoutViewTests` | 7 | cart is trimmed when stock drops before checkout; checkout page loads with items; checkout requires login; empty cart redirects to shop; invalid details do not create an order; order is rolled back when stock runs out mid checkout; placing an order |
 | `orders` | `OrderAccessTests` | 9 | anonymous user is redirected; customer can cancel and stock is returned; order date is a valid html datetime; other customer cannot cancel; other customer gets 403; owner can view order; shipped order cannot be cancelled; staff can view any order; unknown order returns 404 |
+| `orders` | `OrderAdminTests` | 3 | admin cannot cancel without restocking; admin cannot delete orders; admin cannot reopen cancelled order |
 | `orders` | `OrderModelTests` | 4 | order line survives product deletion; relationships and helpers; totals add delivery below threshold; transaction id is generated and unique |
 | `orders` | `RepeatedCancellationTests` | 7 | customer and staff cancelling restocks once; customer cancelling twice restocks once; staff cancelling twice restocks once; stale customer cancel after dispatch is refused; stale customer request does not restock again; stale staff request cannot reopen cancelled order; stale staff request does not restock again |
 | `orders` | `StaffOrderTests` | 5 | customer cannot update status; invalid status is rejected; order list is staff only; staff can update status; staff cancellation restocks once and cannot be reopened |
@@ -661,6 +676,8 @@ Afterwards a database query confirmed no "QA test" product or category was left 
 
 The checks were run against <https://joy2buy-shop-218caf987cba.herokuapp.com/> from GitHub's servers by the **Live site checks** workflow (`.github/workflows/live-checks.yml`), [run 39499040282](https://github.com/Md12Ali/Joy2buy/actions/runs/39499040282). The full output and screenshots of the live site are saved with the run as the `live-check-results` artifact. That run had no QA account logins, so the signed-in checks were skipped; they can be repeated with logins (see below).
 
+**Re-run on 27 October 2026**, after the admin fix (bug 14): [run 40504632653](https://github.com/Md12Ali/Joy2buy/actions/runs/40504632653). Same results: `deployment_check.py` 8 of 8 passed or skipped (0 failed), `validate_site.py` 11 of 11 passed or skipped (0 failed), `browser_checks.py` 49 of 51 passed, 2 skipped, 0 failed. The QA logins were still not supplied, so the signed-in checks were skipped again.
+
 **Production settings seen from outside** (`deployment_check.py`):
 
 | Check | Result | Detail |
@@ -697,7 +714,7 @@ To run the signed-in checks too, add the QA accounts' logins as repository secre
 
 ## 9. Bugs found and fixed
 
-Bugs 1-6 were found during development (recorded in the first version of this project). Bugs 7-13 were found by the testing added after assessment feedback; each fix is a separate commit.
+Bugs 1-6 were found during development (recorded in the first version of this project). Bugs 7-14 were found by the testing and code review added after assessment feedback; each fix is a separate commit.
 
 | # | Bug | How it was found | Cause | Fix | Verified by |
 | --- | --- | --- | --- | --- | --- |
@@ -714,6 +731,7 @@ Bugs 1-6 were found during development (recorded in the first version of this pr
 | 11 | Amber buttons had **no** visible keyboard focus | Keyboard check | Bootstrap's `.btn:focus-visible` removed the outline; its replacement shadow needs a variable custom buttons do not set | `.btn:focus-visible` gets the site focus outline | `browser_checks.py` focus check: 0 failures |
 | 12 | Focus outline too faint on the page background (2.46:1; 3:1 needed) | Contrast calculation | Amber-dark outline on warm white | Navy outline (15.06:1) on light areas; amber (7.9:1) in navy areas | Calculation and visual check of screenshots |
 | 13 | Staff product page scrolled sideways on phones (443px in a 390px window) | Responsive check | A visually hidden, absolutely positioned table heading escaped the `.table-responsive` wrapper | `.table-responsive { position: relative; }` | `browser_checks.py` responsive: 0 failures |
+| 14 | **Staff could cancel or reopen an order in the Django admin without the stock check** | Code review of every place `status` can change (27 Oct 2026) | `OrderAdmin` left `status` editable, so `/admin/` saved it directly and skipped `_change_status()`: cancelling there returned no stock, a cancelled order could be set back to pending, and deleting an order also skipped restocking | `status` is read-only in the admin; orders cannot be deleted there and order lines cannot be added there. Staff change status on the Store management page | 3 new tests in `OrderAdminTests`: they POST the admin change and delete forms and confirm nothing changes |
 
 Faults in the **test tools themselves** were also found and fixed before their results were used:
 - The old validation script reported success without reading the results.
