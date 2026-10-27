@@ -38,8 +38,22 @@ jobs:
       - name: Models match migrations
         run: DEBUG=True python manage.py makemigrations --check --dry-run
       - name: Tests on SQLite
-        run: python manage.py test -v 2
+        run: |
+          set -o pipefail
+          python manage.py test -v 2 2>&1 | tee sqlite.txt
       - name: Tests on PostgreSQL (includes simultaneous cancellation tests)
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/joy2buy
-        run: python manage.py test -v 2
+        run: |
+          set -o pipefail
+          python manage.py test -v 2 2>&1 | tee postgres.txt
+      # Puts the result lines on the run's summary page as annotations.
+      - name: Summary annotations
+        if: always()
+        run: |
+          for db in sqlite postgres; do
+            [ -f "$db.txt" ] || continue
+            ran=$(grep -E '^Ran [0-9]+ tests' "$db.txt" | tail -n 1)
+            result=$(grep -E '^(OK|FAILED)' "$db.txt" | tail -n 1)
+            echo "::notice title=Tests on $db::$ran - $result"
+          done
