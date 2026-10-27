@@ -466,6 +466,69 @@ class RepeatedCancellationTests(OrderTestCase):
         self.assertEqual(order.status, Order.Status.CANCELLED)
 
 
+class OrderAdminTests(OrderTestCase):
+    """The Django admin must not bypass the locked status change."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.superuser = User.objects.create_superuser(
+            username="owner", email="owner@example.com",
+            password="Str0ng-pass!",
+        )
+
+    def admin_post(self, order, status):
+        self.client.force_login(self.superuser)
+        data = {
+            "user": order.user_id,
+            "status": status,
+            "full_name": order.full_name,
+            "email": order.email,
+            "phone": order.phone,
+            "address_line1": order.address_line1,
+            "address_line2": order.address_line2,
+            "city": order.city,
+            "postcode": order.postcode,
+            "country": order.country,
+            "items-TOTAL_FORMS": "0",
+            "items-INITIAL_FORMS": "0",
+            "items-MIN_NUM_FORMS": "0",
+            "items-MAX_NUM_FORMS": "1000",
+        }
+        return self.client.post(
+            reverse("admin:orders_order_change", args=[order.pk]), data
+        )
+
+    def test_admin_cannot_cancel_without_restocking(self):
+        order = self.place_order(self.adapter, 4)
+        self.admin_post(order, Order.Status.CANCELLED)
+        order.refresh_from_db()
+        self.adapter.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.PENDING)
+        self.assertEqual(self.adapter.stock, 6)
+
+    def test_admin_cannot_reopen_cancelled_order(self):
+        order = self.place_order(self.adapter, 4)
+        self.client.post(
+            reverse("orders:order_cancel", args=[order.transaction_id])
+        )
+        self.admin_post(order, Order.Status.PENDING)
+        order.refresh_from_db()
+        self.adapter.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.CANCELLED)
+        self.assertEqual(self.adapter.stock, 10)
+
+    def test_admin_cannot_delete_orders(self):
+        order = self.place_order(self.adapter, 4)
+        self.client.force_login(self.superuser)
+        response = self.client.post(
+            reverse("admin:orders_order_delete", args=[order.pk]),
+            {"post": "yes"},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(Order.objects.filter(pk=order.pk).exists())
+
+
 @skipUnless(
     connection.vendor == "postgresql",
     "Needs a database with real row locks (run with DATABASE_URL set to "
