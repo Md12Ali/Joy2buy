@@ -64,6 +64,16 @@ jobs:
         with:
           name: live-check-results
           path: results/
+      - name: Summary annotations
+        if: always()
+        run: |
+          if [ -n "$JOY2BUY_STAFF_USER" ]; then logins=supplied; else logins=missing; fi
+          echo "::notice title=QA logins::$logins"
+          for f in deployment_check validate_site browser_checks; do
+            line=$(grep -E 'passed|failed|errors' "results/$f.txt" | tail -n 1)
+            skipped=$(grep -c '| SKIPPED |' "results/$f.txt" || true)
+            echo "::notice title=$f::${line:-no output} (table rows skipped: $skipped)"
+          done
       - name: Overall result
         run: |
           echo "deployment_check: ${{ steps.deploy.outcome }}"

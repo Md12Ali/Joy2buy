@@ -59,7 +59,7 @@ Small independent retailers often rely on marketplace listings they do not contr
 
 - A management area inside the site for products, categories and orders.
 - Draft and archived statuses so a product can be prepared or retired without deleting it.
-- Stock is reduced automatically at checkout and returned automatically, exactly once, when an order is cancelled.
+- Stock is reduced automatically at checkout and returned automatically, exactly once, when an order is cancelled. Order status is read-only in the Django admin so this rule cannot be bypassed there.
 - Past orders keep the product name and price paid, even if the product is later changed or deleted.
 
 ---
@@ -588,8 +588,8 @@ The full report, with commands, outputs, manual test steps, bugs found and fixed
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Automated tests (SQLite) | `python manage.py test` | 122 tests: 119 pass, 3 skipped (need PostgreSQL row locks) |
-| Automated tests (PostgreSQL) | `DATABASE_URL=postgres://... python manage.py test` | 122 of 122 pass |
+| Automated tests (SQLite) | `python manage.py test` | 125 tests: 122 pass, 3 skipped (need PostgreSQL row locks) |
+| Automated tests (PostgreSQL) | `DATABASE_URL=postgres://... python manage.py test` | 125 of 125 pass |
 | PEP 8 | `python -m flake8` | 0 findings |
 | JavaScript lint | `npx eslint static/js` | 0 problems |
 | Migrations match models | `python manage.py makemigrations --check --dry-run` | No changes |
@@ -597,7 +597,7 @@ The full report, with commands, outputs, manual test steps, bugs found and fixed
 | Accessibility, keyboard, responsive, JS | `python tools/browser_checks.py` | 145 of 145 checks pass |
 | Browser-level manual test cases | `python tools/ui_walkthrough.py` | 28 of 28 scripted cases pass; results for each of the 40 planned cases in TESTING.md |
 | Deployment CRUD and persistence | `python tools/deployment_check.py` | 19 of 19 checks pass on a production-like local build |
-| Continuous integration | GitHub Actions `Tests` workflow on every push | flake8, migrations and all 122 tests on PostgreSQL 16 and SQLite |
+| Continuous integration | GitHub Actions `Tests` workflow on every push | flake8, ESLint, migrations and all 125 tests on PostgreSQL 16 and SQLite |
 | Live site | GitHub Actions `Live site checks` workflow | HTTPS, headers, HTML/CSS and accessibility checked on the deployed site (TESTING.md section 8) |
 
 ---
@@ -641,6 +641,9 @@ Each change made in response to assessment feedback is a separate commit with a 
 | `Rewrite README, deployment guide and testing report` | This documentation |
 | `Add GitHub Actions: tests on PostgreSQL and on-demand live site checks` | CI on every push; checks of the deployed site |
 | `Record live site check results` | Live results in TESTING.md section 8 |
+| `Lint JavaScript with ESLint and fix its two findings` | ESLint added to CI |
+| `Stop the Django admin from bypassing the locked order status change` | Bug 14: status read-only in the admin, with 3 new tests |
+| `Show test totals on the CI run page as annotations` | Test and live-check totals readable on each GitHub Actions run |
 
 Run `git log --stat` to see each commit in full.
 
